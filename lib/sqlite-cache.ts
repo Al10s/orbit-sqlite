@@ -389,7 +389,9 @@ export default class SQLiteCache extends AsyncRecordCache {
       await tx.executeSql(`INSERT INTO ${type}(${kv.map(({key}) => key).join(', ')}) VALUES(${placeholder.join(', ')})`, kv.map(({value}) => value));
     }
     else {
-      await tx.executeSql(`UPDATE ${type} SET ${kv.map(({key}) => `${key}=?`).join(', ')}`, kv.map(({value}) => value));
+      const values = kv.map(({value}) => value);
+      values.push(id);
+      await tx.executeSql(`UPDATE ${type} SET ${kv.map(({key}) => `${key}=?`).join(', ')} WHERE id=?`, values);
     }
     return record;
   }
