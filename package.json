@@ -1,0 +1,37 @@
+{
+  "name": "@al10s/react-native-orbit-sqlite",
+  "version": "0.0.1",
+  "description": "Support of React Native SQLite storage for Orbit.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Al10s/react-native-orbit-sqlite.git"
+  },
+  "keywords": [
+    "orbit.js",
+    "sqlite"
+  ],
+  "author": "Antoine Lemarchand <an.lemarchand@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Al10s/react-native-orbit-sqlite/issues"
+  },
+  "homepage": "https://github.com/Al10s/react-native-orbit-sqlite#readme",
+  "devDependencies": {
+    "@types/react-native-sqlite-storage": "^3.3.1",
+    "typescript": "^3.6.4"
+  },
+  "peerDependencies": {
+    "@orbit/core": "0.16.3"
+  },
+  "dependencies": {
+    "@orbit/data": "^0.16.3",
+    "@orbit/record-cache": "^0.16.3",
+    "@orbit/utils": "^0.16.3",
+    "react-native-sqlite-storage": "^4.1.0"
+  }
+}
