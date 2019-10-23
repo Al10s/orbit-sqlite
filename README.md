@@ -1,7 +1,7 @@
 # react-native-orbit-sqlite
 
 
-Allows creating a source of [https://github.com/andpor/react-native-sqlite-storage] for [https://github.com/orbitjs/orbit]@0.16.x.
+Allows creating a source of [react-native-sqlite-storage](https://github.com/andpor/react-native-sqlite-storage) for [Orbit.js](https://github.com/orbitjs/orbit)@0.16.x.
 
 
 ## Disclaimer
