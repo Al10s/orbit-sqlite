@@ -19,6 +19,16 @@ Then I will bump the version to match the supported Orbit.js version.
 **Note(2)** : Help and advices are welcome.
 
 
+## Install
+
+Check your version of Orbit. Current supported version is 0.16.x.
+
+```bash
+yarn add react-native-sqlite-storage # Required to autolink for react native
+yarn add @al10s/react-native-orbit-sqlite
+```
+
+
 ## Example of use
 
 ```ts

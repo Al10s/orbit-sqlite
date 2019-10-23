@@ -26,7 +26,8 @@
     "typescript": "^3.6.4"
   },
   "peerDependencies": {
-    "@orbit/data": "0.16.3"
+    "@orbit/data": "0.16.3",
+    "react-native-sqlite-storage": "^4.1.0"
   },
   "dependencies": {
     "@orbit/data": "^0.16.3",
