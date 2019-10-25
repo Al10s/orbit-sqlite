@@ -44,9 +44,15 @@ class EventEmitter {
   }
 }
 
+export type SQLiteDBLocation = 'default'|'Documents'|'Library'
+
+export interface SQLiteRecord {
+  id: string;
+}
+
 export interface SQLiteCacheSettings extends AsyncRecordCacheSettings {
   namespace: string;
-  location: 'default'|'Documents'|'Library';
+  location?: SQLiteDBLocation;
 }
 
 export interface MigrateDBData {
@@ -56,7 +62,7 @@ export interface MigrateDBData {
 
 export default class SQLiteCache extends AsyncRecordCache {
   protected _namespace: string;
-  protected _location: 'default'|'Documents'|'Library';
+  protected _location: SQLiteDBLocation;
   protected _db?: SQLiteDatabase;
   protected _dbGenerating: boolean;
   protected _dbAvailableEvent: EventEmitter;
@@ -68,7 +74,7 @@ export default class SQLiteCache extends AsyncRecordCache {
     super(settings);
 
     this._namespace = settings.namespace;
-    this._location = settings.location;
+    this._location = settings.location || 'default';
     this._dbGenerating = false;
     this._dbAvailableEvent = new EventEmitter();
   }
@@ -114,7 +120,7 @@ export default class SQLiteCache extends AsyncRecordCache {
     }
   }
 
-  get location (): 'default'|'Documents'|'Library' {
+  get location (): SQLiteDBLocation {
     return this._location;
   }
 
@@ -261,7 +267,7 @@ export default class SQLiteCache extends AsyncRecordCache {
     });
   }
 
-  private _parseRecordFromDb (input: object, type: string): Record {
+  private _parseRecordFromDb (input: SQLiteRecord, type: string): Record {
     log('SQLiteCache', '_parseRecordFromDb called for', type);
     const attributes = { ...input };
     const id = attributes.id;
