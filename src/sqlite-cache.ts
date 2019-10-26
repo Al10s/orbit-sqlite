@@ -447,20 +447,25 @@ export default class SQLiteCache extends AsyncRecordCache {
 
   async removeRecordAsync (recordIdentity: RecordIdentity): Promise<Record> {
     log('SQLiteCache', 'removeRecordAsync called for', recordIdentity);
+    const initialRecord = await this.getRecordAsync(recordIdentity);
     await this.openDB()
       .then((db: SQLiteDatabase) => db.transaction(async (tx: Transaction) => {
         await this._removeRecord(recordIdentity, tx);
       }));
+    return initialRecord;
   }
 
   async removeRecordsAsync (records: RecordIdentity[]): Promise<Record[]> {
     log('SQLiteCache', 'removeRecordsAsync called for', records);
     if (records.length > 0) {
+      const initialRecords = await this.getRecordsAsync(records);
       await this.openDB()
         .then((db: SQLiteDatabase) => db.transaction(async (tx: Transaction) => {
           await Promise.all(records.map((record: RecordIdentity) => this._removeRecord(record, tx)));
         }));
+      return initialRecords;
     }
+    return Promise.resolve([]);
   }
 
   getInverseRelationshipsAsync (recordIdentity: RecordIdentity):
@@ -469,17 +474,21 @@ export default class SQLiteCache extends AsyncRecordCache {
     return new Promise((resolve, reject) => {
       const { type, id } = recordIdentity;
       const record = recordIdentity;
-      const relationships: RelationshipDefinition[] =
-        Object.entries(this.schema.getModel(type).relationships)
-        .map(([ , relationship ]) => relationship);
-      if (relationships === undefined) {
+      const modelRelationships = this.schema.getModel(type).relationships;
+      if (modelRelationships === undefined) {
         return resolve([]);
       }
+      const relationships: RelationshipDefinition[] =
+        Object.entries(modelRelationships)
+        .map(([ , relationship ]) => relationship);
       Object.entries(relationships).map(([ , relationship ]) => relationship);
       this.openDB()
         .then((db: SQLiteDatabase) => db.transaction(async (tx: Transaction) => {
           const records = [];
-          const results = await Promise.all(relationships.map(async ({ model, type: relationshipType }) => {
+          const results = await Promise.all(relationships.map(async (relationship) => {
+            assert('Multiple models relationship is not yet supported', typeof relationship.model !== 'string')
+            const model: string = typeof relationship.model === 'string' ? relationship.model : relationship.model[0];
+            const relationshipType = relationship.type;
             const [ , rs ] = await tx.executeSql(
               `SELECT ${model}_id FROM relationships_${type}_${model} WHERE ${type}_id = ?`,
               [ id ]
