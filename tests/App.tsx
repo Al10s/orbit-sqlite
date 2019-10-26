@@ -1,114 +1,63 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- * @flow
- */
-
-import React, {Fragment} from 'react';
+import React from 'react';
 import {
-  SafeAreaView,
-  StyleSheet,
-  ScrollView,
   View,
   Text,
-  StatusBar,
+  ScrollView,
 } from 'react-native';
+import { RunnableTest } from './utils'
+import TestComponent from './components/TestComponent';
+import styles from './styles';
+import { tests } from './tests';
 
-import {
-  Header,
-  LearnMoreLinks,
-  Colors,
-  DebugInstructions,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+interface Props {}
+interface State {
+  tests: RunnableTest[];
+}
 
-const App = () => {
-  return (
-    <Fragment>
-      <StatusBar barStyle="dark-content" />
-      <SafeAreaView>
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          style={styles.scrollView}>
-          <Header />
-          {global.HermesInternal == null ? null : (
-            <View style={styles.engine}>
-              <Text style={styles.footer}>Engine: Hermes</Text>
-            </View>
+export default class App extends React.Component <Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      tests: [],
+    };
+  }
+
+  addNextTest () {
+    const index = this.state.tests.length;
+    if (index < tests.length) {
+      const test = tests[index];
+      test.emitter.on('done', () => {
+        this.addNextTest();
+      });
+      test.emitter.on('failed', () => {
+        this.addNextTest();
+      });
+      this.setState({ tests: [...this.state.tests].concat(test) });
+    }
+  }
+
+  componentDidMount () {
+    this.addNextTest();
+  }
+
+  render () {
+    return (
+      <View
+        style={styles.root}>
+        <View
+          style={{ ...styles.row, ...styles.header_row }}>
+          <Text style={{ ...styles.cell, ...styles.header_cell }}>Label</Text>
+          <Text style={{ ...styles.cell, ...styles.header_cell }}>Result</Text>
+        </View>
+        <ScrollView>
+          {this.state.tests.map((test: RunnableTest, key: number) => 
+            <TestComponent
+              key={key}
+              test={test}
+              />
           )}
-          <View style={styles.body}>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Step One</Text>
-              <Text style={styles.sectionDescription}>
-                Edit <Text style={styles.highlight}>App.js</Text> to change this
-                screen and then come back to see your edits.
-              </Text>
-            </View>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>See Your Changes</Text>
-              <Text style={styles.sectionDescription}>
-                <ReloadInstructions />
-              </Text>
-            </View>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Debug</Text>
-              <Text style={styles.sectionDescription}>
-                <DebugInstructions />
-              </Text>
-            </View>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Learn More</Text>
-              <Text style={styles.sectionDescription}>
-                Read the docs to discover what to do next:
-              </Text>
-            </View>
-            <LearnMoreLinks />
-          </View>
         </ScrollView>
-      </SafeAreaView>
-    </Fragment>
-  );
+      </View>
+    );
+  }
 };
-
-const styles = StyleSheet.create({
-  scrollView: {
-    backgroundColor: Colors.lighter,
-  },
-  engine: {
-    position: 'absolute',
-    right: 0,
-  },
-  body: {
-    backgroundColor: Colors.white,
-  },
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.black,
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-    color: Colors.dark,
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-  footer: {
-    color: Colors.dark,
-    fontSize: 12,
-    fontWeight: '600',
-    padding: 4,
-    paddingRight: 12,
-    textAlign: 'right',
-  },
-});
-
-export default App;
