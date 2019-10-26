@@ -473,21 +473,15 @@ export default class SQLiteCache extends AsyncRecordCache {
     return new Promise((resolve, reject) => {
       const { type, id } = recordIdentity;
       const record = recordIdentity;
-      const modelRelationships = this.schema.getModel(type).relationships;
-      if (modelRelationships === undefined) {
+      const relationships = this.schema.getModel(type).relationships;
+      if (relationships === undefined) {
         return resolve([]);
       }
-      const relationships: RelationshipDefinition[] =
-        Object.entries(modelRelationships)
-        .map(([ , relationship ]) => relationship);
-      Object.entries(relationships).map(([ , relationship ]) => relationship);
+      const records: RecordRelationshipIdentity[] = [];
       this.openDB()
         .then((db: SQLiteDatabase) => db.transaction(async (tx: Transaction) => {
-          const records = [];
-          const results = await Promise.all(relationships.map(async (relationship) => {
-            assert('Multiple models relationship is not yet supported', typeof relationship.model !== 'string')
+          const results = await Promise.all(Object.entries(relationships).map(async ([ name, relationship ]) => {
             const model: string = typeof relationship.model === 'string' ? relationship.model : relationship.model[0];
-            const relationshipType = relationship.type;
             const [ , rs ] = await tx.executeSql(
               `SELECT ${model}_id FROM relationships_${type}_${model} WHERE ${type}_id = ?`,
               [ id ]
@@ -497,7 +491,7 @@ export default class SQLiteCache extends AsyncRecordCache {
               for (let idx = 0; idx < rs.rows.length; idx ++) {
                 modelRelationships.push({
                   record,
-                  relationship: relationshipType,
+                  relationship: name,
                   relatedRecord: {
                     type: model,
                     id: rs.rows.item(idx)[`${model}_id`]
@@ -512,8 +506,8 @@ export default class SQLiteCache extends AsyncRecordCache {
               records.push(record);
             }
           }
-          resolve(records);
         }))
+        .then(() => resolve(records))
         .catch(reject);
     });
   }
@@ -555,7 +549,7 @@ export default class SQLiteCache extends AsyncRecordCache {
               `
                 DELETE FROM relationships_${record.type}_${relatedRecord.type}
                 WHERE ${record.type}_id = ?
-                AND ${relatedRecord.id}_id = ?
+                AND ${relatedRecord.type}_id = ?
               `,
               [ record.id, relatedRecord.id ]
             );
