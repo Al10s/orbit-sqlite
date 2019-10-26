@@ -267,12 +267,22 @@ export default class SQLiteCache extends AsyncRecordCache {
     });
   }
 
+  private _stripNull (input: object): object {
+    const output = {};
+    for (const [key, value] of Object.entries(input)) {
+      if (value !== null) {
+        output[key] = value;
+      }
+    }
+    return output;
+  }
+
   private _parseRecordFromDb (input: SQLiteRecord, type: string): Record {
     log('SQLiteCache', '_parseRecordFromDb called for', type);
     const attributes = { ...input };
     const id = attributes.id;
     delete attributes.id;
-    return { type, id, attributes };
+    return { type, id, attributes: this._stripNull(attributes) };
   }
 
   getRecordAsync (record: RecordIdentity): Promise<Record|undefined> {
@@ -337,41 +347,30 @@ export default class SQLiteCache extends AsyncRecordCache {
     }
     else if (Array.isArray(typeOrIdentities)) {
       const identities: RecordIdentity[] = typeOrIdentities;
-      const records: Record[] = [];
-
       if (identities.length > 0) {
-        const types: object = {};
-        for (let identity of identities) {
-          if (types[identity.type] === undefined) {
-            types[identity.type] = [];
-          }
-          types[identity.type].push(identity.id);
-        }
-
         return new Promise((resolve, reject) => {
           this.openDB()
             .then(async (db: SQLiteDatabase) => {
-              Promise.all(Object.keys(types).map(async (type: string) => {
-                const ids: string[] = types[type];
-                const queryPiece = Array(ids.length).fill('?').join(',');
-                const [ resultSet ] = await db.executeSql(`SELECT * FROM ${type} WHERE id IN (${queryPiece})`, ids);
-                for (let idx = 0 ; idx < resultSet.rows.length; idx ++) {
-                  const record = this._parseRecordFromDb(resultSet.rows.item(idx), type);
+              Promise.all(identities.map(async ({ id, type }): Promise<Record|undefined> => {
+                const [ resultSet ] = await db.executeSql(`SELECT * FROM ${type} WHERE id=?`, [ id ]);
+                const result = resultSet.rows.item(0);
+                if (result) {
+                  const record = this._parseRecordFromDb(result, type);
                   if (this._keyMap) {
                     this._keyMap.pushRecord(record);
                   }
-                  records.push(record);
+                  return record;
                 }
               }))
-              .then(() => {
-                resolve(records);
+              .then((records) => {
+                resolve(records.filter((record?: Record) => record !== undefined));
               })
             })
             .catch(reject);
         });
       }
       else {
-        return Promise.resolve(records);
+        return Promise.resolve([]);
       }
     }
     else {
