@@ -51,7 +51,7 @@ export interface SQLiteRecord {
 }
 
 export interface SQLiteCacheSettings extends AsyncRecordCacheSettings {
-  namespace: string;
+  namespace?: string;
   location?: SQLiteDBLocation;
 }
 
@@ -73,7 +73,7 @@ export default class SQLiteCache extends AsyncRecordCache {
 
     super(settings);
 
-    this._namespace = settings.namespace;
+    this._namespace = settings.namespace || 'sqlite';
     this._location = settings.location || 'default';
     this._dbGenerating = false;
     this._dbAvailableEvent = new EventEmitter();
