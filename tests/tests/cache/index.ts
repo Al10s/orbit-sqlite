@@ -2,8 +2,7 @@ import { Test } from '../../utils';
 import { Schema, KeyMap, Record } from '@orbit/data';
 import { SQLiteCache } from '@al10s/react-native-orbit-sqlite';
 import assert from 'assert';
-
-const timeout = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+import { getRecordFromSQLiteDB } from './support';
 
 interface Context {
   schema: Schema;
@@ -75,21 +74,6 @@ const runner = (run: (context: Context) => Promise<void>): (() => Promise<void>)
   await afterEach(context);
 }
 
-const getRecordFromSQLiteDB = async (cache: SQLiteCache, record: Record): Promise<Record> => {
-  const db = await cache.openDB();
-  const [ res ] = await db.executeSql(`SELECT * FROM ${record.type} WHERE id=?`, [ record.id ]);
-  const { id, ...attributes } = res.rows.item(0);
-  return {
-    id: record.id,
-    type: record.type,
-    keys: undefined,
-    attributes,
-    relationships: undefined, // TODO
-    links: undefined,
-    meta: undefined,
-  };
-}
-
 export const tests: Test[] = [
   {
     label: 'Cache exists',
@@ -127,17 +111,17 @@ export const tests: Test[] = [
       await cache.setRecordAsync(io);
       await cache.setRecordAsync(europa);
 
-      assert.deepEqual(await cache.getRecordAsync(jupiter), jupiter);
-      assert.deepEqual(await cache.getRecordAsync(io), io);
-      assert.deepEqual(await cache.getRecordAsync(europa), europa);
+      assert.deepStrictEqual(await cache.getRecordAsync(jupiter), jupiter);
+      assert.deepStrictEqual(await cache.getRecordAsync(io), io);
+      assert.deepStrictEqual(await cache.getRecordAsync(europa), europa);
 
       await cache.removeRecordAsync(jupiter);
       await cache.removeRecordAsync(io);
       await cache.removeRecordAsync(europa);
 
-      assert.deepEqual(await cache.getRecordAsync(jupiter), undefined);
-      assert.deepEqual(await cache.getRecordAsync(io), undefined);
-      assert.deepEqual(await cache.getRecordAsync(europa), undefined);
+      assert.deepStrictEqual(await cache.getRecordAsync(jupiter), undefined);
+      assert.deepStrictEqual(await cache.getRecordAsync(io), undefined);
+      assert.deepStrictEqual(await cache.getRecordAsync(europa), undefined);
     }),
   },
   {
@@ -155,20 +139,18 @@ export const tests: Test[] = [
         id: 'europa',
         attributes: { name: 'Europa' }
       };
-  
-      await cache.openDB();
-  
+
       await cache.setRecordsAsync([jupiter, io, europa]);
-  
-      assert.deepEqual(await cache.getRecordsAsync([jupiter, io, europa]), [
+
+      assert.deepStrictEqual(await cache.getRecordsAsync([jupiter, io, europa]), [
         jupiter,
         io,
         europa
       ]);
-  
+
       await cache.removeRecordsAsync([jupiter, io, europa]);
-  
-      assert.deepEqual(await cache.getRecordsAsync([jupiter, io, europa]), []);
+
+      assert.deepStrictEqual(await cache.getRecordsAsync([jupiter, io, europa]), []);
     }),
   },
   {
@@ -179,22 +161,20 @@ export const tests: Test[] = [
       const io = { type: 'moon', id: 'io' };
       const europa = { type: 'moon', id: 'europa' };
       const callisto = { type: 'moon', id: 'callisto' };
-  
-      await cache.openDB();
-  
-      assert.deepEqual(
+
+      assert.deepStrictEqual(
         await cache.getInverseRelationshipsAsync(jupiter),
         [],
         'no inverse relationships to start'
       );
-  
+
       await cache.addInverseRelationshipsAsync([
         { record: jupiter, relationship: 'moons', relatedRecord: io },
         { record: jupiter, relationship: 'moons', relatedRecord: europa },
         { record: jupiter, relationship: 'moons', relatedRecord: callisto }
       ]);
-  
-      assert.deepEqual(
+
+      assert.deepStrictEqual(
         await cache.getInverseRelationshipsAsync(jupiter),
         [
           { record: jupiter, relationship: 'moons', relatedRecord: callisto },
@@ -203,14 +183,14 @@ export const tests: Test[] = [
         ],
         'inverse relationships have been added'
       );
-  
+
       await cache.removeInverseRelationshipsAsync([
         { record: jupiter, relationship: 'moons', relatedRecord: io },
         { record: jupiter, relationship: 'moons', relatedRecord: europa },
         { record: jupiter, relationship: 'moons', relatedRecord: callisto }
       ]);
-  
-      assert.deepEqual(
+
+      assert.deepStrictEqual(
         await cache.getInverseRelationshipsAsync(jupiter),
         [],
         'inverse relationships have been removed'
@@ -221,7 +201,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - addRecord',
     run: runner(async (context: Context) => {
       const { cache, keyMap } = context;
-      let planet: Record = {
+      const planet: Record = {
         type: 'planet',
         id: 'jupiter',
         keys: {
@@ -232,15 +212,15 @@ export const tests: Test[] = [
           classification: 'gas giant'
         }
       };
-  
+
       await cache.patch(t => t.addRecord(planet));
 
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, planet),
         planet,
         'sqlitedb contains record'
       );
-  
+
       assert.equal(
         keyMap.keyToId('planet', 'remoteId', 'j'),
         'jupiter',
@@ -252,7 +232,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - updateRecord',
     run: runner(async (context: Context) => {
       const { cache, keyMap } = context;
-      let original: Record = {
+      const original: Record = {
         type: 'planet',
         id: 'jupiter',
         keys: {
@@ -267,8 +247,8 @@ export const tests: Test[] = [
           }
         }
       };
-  
-      let updates: Record = {
+
+      const updates: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -280,8 +260,8 @@ export const tests: Test[] = [
           }
         }
       };
-  
-      let expected: Record = {
+
+      const expected: Record = {
         type: 'planet',
         id: 'jupiter',
         keys: {
@@ -300,10 +280,10 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t => t.addRecord(original));
       await cache.patch(t => t.updateRecord(updates));
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, expected),
         expected,
         'sqlitedb contains record'
@@ -319,7 +299,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - updateRecord - when record does not exist',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let revised = {
+      const revised = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -328,9 +308,9 @@ export const tests: Test[] = [
           revised: true
         }
       };
-  
+
       await cache.patch(t => t.updateRecord(revised));
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -341,7 +321,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - removeRecord',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let planet: Record = {
+      const planet: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -349,7 +329,7 @@ export const tests: Test[] = [
           classification: 'gas giant'
         }
       };
-  
+
       await cache.patch(t => t.addRecord(planet));
       await cache.patch(t => t.removeRecord(planet));
       assert.equal(
@@ -363,11 +343,11 @@ export const tests: Test[] = [
     label: 'Cache: #patch - removeRecord - when record does not exist',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let planet = {
+      const planet = {
         type: 'planet',
         id: 'jupiter'
       };
-  
+
       await cache.patch(t => t.removeRecord(planet));
       assert.equal(
         await getRecordFromSQLiteDB(cache, planet),
@@ -380,7 +360,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - replaceKey',
     run: runner(async (context: Context) => {
       const { cache, keyMap } = context;
-      let original: Record = {
+      const original: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -388,8 +368,8 @@ export const tests: Test[] = [
           classification: 'gas giant'
         }
       };
-  
-      let revised: Record = {
+
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -400,15 +380,15 @@ export const tests: Test[] = [
           remoteId: '123'
         }
       };
-  
+
       await cache.patch(t => t.addRecord(original));
       await cache.patch(t => t.replaceKey(original, 'remoteId', '123'));
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
       );
-  
+
       assert.equal(
         keyMap.keyToId('planet', 'remoteId', '123'),
         'jupiter',
@@ -420,23 +400,23 @@ export const tests: Test[] = [
     label: 'Cache: #patch - replaceKey - when base record does not exist',
     run: runner(async (context: Context) => {
       const { cache, keyMap } = context;
-      let revised: Record = {
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         keys: {
           remoteId: '123'
         }
       };
-  
+
       await cache.patch(t =>
         t.replaceKey({ type: 'planet', id: 'jupiter' }, 'remoteId', '123')
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
       );
-  
+
       assert.equal(
         keyMap.keyToId('planet', 'remoteId', '123'),
         'jupiter',
@@ -448,18 +428,18 @@ export const tests: Test[] = [
     label: 'Cache: #patch - replaceAttribute - when base record does not exist',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let revised: Record = {
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
           order: 5
         }
       };
-  
+
       await cache.patch(t =>
         t.replaceAttribute({ type: 'planet', id: 'jupiter' }, 'order', 5)
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -470,7 +450,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - addToRelatedRecords',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let original: Record = {
+      const original: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -483,8 +463,8 @@ export const tests: Test[] = [
           }
         }
       };
-  
-      let revised: Record = {
+
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -497,12 +477,12 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t => t.addRecord(original));
       await cache.patch(t =>
         t.addToRelatedRecords(original, 'moons', { type: 'moon', id: 'moon1' })
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -513,7 +493,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - addToRelatedRecords - when base record does not exist',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let revised: Record = {
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         relationships: {
@@ -522,14 +502,14 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t =>
         t.addToRelatedRecords({ type: 'planet', id: 'jupiter' }, 'moons', {
           type: 'moon',
           id: 'moon1'
         })
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -540,7 +520,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - removeFromRelatedRecords',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let original: Record = {
+      const original: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -553,8 +533,8 @@ export const tests: Test[] = [
           }
         }
       };
-  
-      let revised: Record = {
+
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -567,7 +547,7 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t => t.addRecord(original));
       await cache.patch(t =>
         t.removeFromRelatedRecords(original, 'moons', {
@@ -575,7 +555,7 @@ export const tests: Test[] = [
           id: 'moon2'
         })
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -586,7 +566,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - removeFromRelatedRecords - when base record does not exist',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let revised: Record = {
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         relationships: {
@@ -595,7 +575,7 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t =>
         t.removeFromRelatedRecords({ type: 'planet', id: 'jupiter' }, 'moons', {
           type: 'moon',
@@ -613,7 +593,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - replaceRelatedRecords',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let original: Record = {
+      const original: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -626,8 +606,8 @@ export const tests: Test[] = [
           }
         }
       };
-  
-      let revised: Record = {
+
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -640,7 +620,7 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t => t.addRecord(original));
       await cache.patch(t =>
         t.replaceRelatedRecords(original, 'moons', [
@@ -648,7 +628,7 @@ export const tests: Test[] = [
           { type: 'moon', id: 'moon3' }
         ])
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -659,7 +639,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - replaceRelatedRecords - when base record does not exist',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let revised: Record = {
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         relationships: {
@@ -668,14 +648,14 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t =>
         t.replaceRelatedRecords({ type: 'planet', id: 'jupiter' }, 'moons', [
           { type: 'moon', id: 'moon2' },
           { type: 'moon', id: 'moon3' }
         ])
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -686,7 +666,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - replaceRelatedRecord - with record',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let original: Record = {
+      const original: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -699,8 +679,8 @@ export const tests: Test[] = [
           }
         }
       };
-  
-      let revised: Record = {
+
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -713,7 +693,7 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t => t.addRecord(original));
       await cache.patch(t =>
         t.replaceRelatedRecord(original, 'solarSystem', {
@@ -721,7 +701,7 @@ export const tests: Test[] = [
           id: 'ss1'
         })
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -732,7 +712,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - replaceRelatedRecord - with record - when base record does not exist',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let revised: Record = {
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         relationships: {
@@ -741,14 +721,14 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t =>
         t.replaceRelatedRecord({ type: 'planet', id: 'jupiter' }, 'solarSystem', {
           type: 'solarSystem',
           id: 'ss1'
         })
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -759,7 +739,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - replaceRelatedRecord - with null',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let original: Record = {
+      const original: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -772,8 +752,8 @@ export const tests: Test[] = [
           }
         }
       };
-  
-      let revised: Record = {
+
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -786,12 +766,12 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t => t.addRecord(original));
       await cache.patch(t =>
         t.replaceRelatedRecord(original, 'solarSystem', null)
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -802,7 +782,7 @@ export const tests: Test[] = [
     label: 'Cache: #patch - replaceRelatedRecord - with null - when base record does not exist',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let revised: Record = {
+      const revised: Record = {
         type: 'planet',
         id: 'jupiter',
         relationships: {
@@ -811,7 +791,7 @@ export const tests: Test[] = [
           }
         }
       };
-  
+
       await cache.patch(t =>
         t.replaceRelatedRecord(
           { type: 'planet', id: 'jupiter' },
@@ -819,7 +799,7 @@ export const tests: Test[] = [
           null
         )
       );
-      assert.deepEqual(
+      assert.deepStrictEqual(
         await getRecordFromSQLiteDB(cache, revised),
         revised,
         'sqlitedb contains record'
@@ -830,7 +810,7 @@ export const tests: Test[] = [
     label: 'Cache: #query - all records',
     run: runner(async (context: Context) => {
       const { cache, keyMap } = context;
-      let earth: Record = {
+      const earth: Record = {
         type: 'planet',
         id: 'earth',
         keys: {
@@ -841,8 +821,8 @@ export const tests: Test[] = [
           classification: 'terrestrial'
         }
       };
-  
-      let jupiter: Record = {
+
+      const jupiter: Record = {
         type: 'planet',
         id: 'jupiter',
         keys: {
@@ -853,8 +833,8 @@ export const tests: Test[] = [
           classification: 'gas giant'
         }
       };
-  
-      let io: Record = {
+
+      const io: Record = {
         type: 'moon',
         id: 'io',
         keys: {
@@ -864,23 +844,23 @@ export const tests: Test[] = [
           name: 'Io'
         }
       };
-  
+
       await cache.patch(t => [
         t.addRecord(earth),
         t.addRecord(jupiter),
         t.addRecord(io)
       ]);
-  
+
       // reset keyMap to verify that querying records also adds keys
       keyMap.reset();
-  
-      let records = await cache.query(q => q.findRecords());
-      assert.deepEqual(
+
+      const records = await cache.query(q => q.findRecords());
+      assert.deepStrictEqual(
         records,
         [io, earth, jupiter],
         'query results are expected'
       );
-  
+
       assert.equal(
         keyMap.keyToId('planet', 'remoteId', 'p1'),
         'earth',
@@ -902,7 +882,7 @@ export const tests: Test[] = [
     label: 'Cache: #query - records of one type',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let earth: Record = {
+      const earth: Record = {
         type: 'planet',
         id: 'earth',
         attributes: {
@@ -910,8 +890,8 @@ export const tests: Test[] = [
           classification: 'terrestrial'
         }
       };
-  
-      let jupiter: Record = {
+
+      const jupiter: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -919,30 +899,30 @@ export const tests: Test[] = [
           classification: 'gas giant'
         }
       };
-  
-      let io: Record = {
+
+      const io: Record = {
         type: 'moon',
         id: 'io',
         attributes: {
           name: 'Io'
         }
       };
-  
+
       await cache.patch(t => [
         t.addRecord(earth),
         t.addRecord(jupiter),
         t.addRecord(io)
       ]);
-  
-      let records = await cache.query(q => q.findRecords('planet'));
-      assert.deepEqual(records, [earth, jupiter], 'query results are expected');
+
+      const records = await cache.query(q => q.findRecords('planet'));
+      assert.deepStrictEqual(records, [earth, jupiter], 'query results are expected');
     }),
   },
   {
     label: 'Cache: #query - records by identity',
     run: runner(async (context: Context) => {
       const { cache } = context;
-      let earth: Record = {
+      const earth: Record = {
         type: 'planet',
         id: 'earth',
         attributes: {
@@ -950,8 +930,8 @@ export const tests: Test[] = [
           classification: 'terrestrial'
         }
       };
-  
-      let jupiter: Record = {
+
+      const jupiter: Record = {
         type: 'planet',
         id: 'jupiter',
         attributes: {
@@ -959,32 +939,32 @@ export const tests: Test[] = [
           classification: 'gas giant'
         }
       };
-  
-      let io: Record = {
+
+      const io: Record = {
         type: 'moon',
         id: 'io',
         attributes: {
           name: 'Io'
         }
       };
-  
+
       await cache.patch(t => [
         t.addRecord(earth),
         t.addRecord(jupiter),
         t.addRecord(io)
       ]);
-  
-      let records = await cache.query(q =>
+
+      const records = await cache.query(q =>
         q.findRecords([earth, io, { type: 'planet', id: 'FAKE' }])
       );
-      assert.deepEqual(records, [earth, io], 'only matches are returned');
+      assert.deepStrictEqual(records, [earth, io], 'only matches are returned');
     }),
   },
   {
     label: 'Cache: #query - a specific record',
     run: runner(async (context: Context) => {
       const { cache, keyMap } = context;
-      let earth: Record = {
+      const earth: Record = {
         type: 'planet',
         id: 'earth',
         attributes: {
@@ -992,8 +972,8 @@ export const tests: Test[] = [
           classification: 'terrestrial'
         }
       };
-  
-      let jupiter: Record = {
+
+      const jupiter: Record = {
         type: 'planet',
         id: 'jupiter',
         keys: {
@@ -1004,28 +984,28 @@ export const tests: Test[] = [
           classification: 'gas giant'
         }
       };
-  
-      let io: Record = {
+
+      const io: Record = {
         type: 'moon',
         id: 'io',
         attributes: {
           name: 'Io'
         }
       };
-  
+
       await cache.patch(t => [
         t.addRecord(earth),
         t.addRecord(jupiter),
         t.addRecord(io)
       ]);
-  
+
       // reset keyMap to verify that pulling records also adds keys
       keyMap.reset();
-  
-      let record = await cache.query(q => q.findRecord(jupiter));
-  
-      assert.deepEqual(record, jupiter, 'query results are expected');
-  
+
+      const record = await cache.query(q => q.findRecord(jupiter));
+
+      assert.deepStrictEqual(record, jupiter, 'query results are expected');
+
       assert.equal(
         keyMap.keyToId('planet', 'remoteId', 'p2'),
         'jupiter',
