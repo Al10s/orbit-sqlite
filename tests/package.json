@@ -28,6 +28,7 @@
     "eslint": "^5.16.0",
     "jest": "^24.1.0",
     "metro-react-native-babel-preset": "0.54.1",
+    "moment": "^2.24.0",
     "react-native-sqlite-storage": "^4.1.0",
     "react-native-typescript-transformer": "^1.2.13",
     "react-test-renderer": "16.8.6",

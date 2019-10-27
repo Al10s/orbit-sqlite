@@ -7,6 +7,8 @@ const styles = StyleSheet.create({
   row: {
     flex: 1,
     flexDirection: 'row',
+    paddingLeft: 10,
+    paddingRight: 10,
   },
   cell: {
     flex: 1,
@@ -34,6 +36,16 @@ const styles = StyleSheet.create({
   },
   failed: {
     backgroundColor: 'red',
+  },
+  label_cell: {
+    flex: 3,
+  },
+  result_cell: {
+    flex: 3,
+  },
+  duration_cell: {
+    flex: 1,
+    textAlign: 'right'
   },
 });
 

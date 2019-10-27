@@ -54,8 +54,9 @@ export default class App extends React.Component <Props, State> {
         style={styles.root}>
         <View
           style={{ ...styles.row, ...styles.header_row }}>
-          <Text style={{ ...styles.cell, ...styles.header_cell }}>Label</Text>
-          <Text style={{ ...styles.cell, ...styles.header_cell }}>Result</Text>
+          <Text style={{ ...styles.cell, ...styles.header_cell, ...styles.label_cell }}>Label</Text>
+          <Text style={{ ...styles.cell, ...styles.header_cell, ...styles.result_cell }}>Result</Text>
+          <Text style={{ ...styles.cell, ...styles.header_cell, ...styles.duration_cell }}>Duration</Text>
         </View>
         <ScrollView>
           {this.state.tests.map((test: RunnableTest, key: number) => 
