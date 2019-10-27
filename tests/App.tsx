@@ -8,6 +8,8 @@ import { RunnableTest } from './utils'
 import TestComponent from './components/TestComponent';
 import styles from './styles';
 import { tests } from './tests';
+import { SQLiteCache } from './dist';
+import { Schema } from '@orbit/data';
 
 interface Props {}
 interface State {
@@ -37,8 +39,14 @@ export default class App extends React.Component <Props, State> {
   }
 
   componentDidMount () {
-    this.addNextTest();
-  }
+    // TODO Handle test suites (before/after suite, beforeEach/afterEach unit)
+    // This should go in the before() CacheTest suite
+    const schema = new Schema();
+    const cache = new SQLiteCache({ schema });
+    cache.openDB()
+      .then(() => cache.deleteDB())
+      .then(() => this.addNextTest());
+    }
 
   render () {
     return (

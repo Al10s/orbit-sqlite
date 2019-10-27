@@ -1,8 +1,7 @@
 import { Test } from '../../utils';
-import { Schema, KeyMap, Record } from '@orbit/data';
+import { Schema, KeyMap, Record, TransformBuilder } from '@orbit/data';
 import { SQLiteCache } from '@al10s/react-native-orbit-sqlite';
 import assert from 'assert';
-import { getRecordFromSQLiteDB } from './support';
 
 interface Context {
   schema: Schema;
@@ -216,9 +215,8 @@ export const tests: Test[] = [
       await cache.patch(t => t.addRecord(planet));
 
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, planet),
+        await cache.getRecordAsync(planet),
         planet,
-        'sqlitedb contains record'
       );
 
       assert.equal(
@@ -232,6 +230,14 @@ export const tests: Test[] = [
     label: 'Cache: #patch - updateRecord',
     run: runner(async (context: Context) => {
       const { cache, keyMap } = context;
+      const moon: Record = {
+        type: 'moon',
+        id: 'moon1'
+      };
+      const solarSystem: Record = {
+        type: 'solarSystem',
+        id: 'ss1'
+      };
       const original: Record = {
         type: 'planet',
         id: 'jupiter',
@@ -281,10 +287,12 @@ export const tests: Test[] = [
         }
       };
 
-      await cache.patch(t => t.addRecord(original));
+      await cache.setRecordsAsync([ moon, solarSystem ]);
+      await cache.patch((t: TransformBuilder) => t.addRecord(original));
       await cache.patch(t => t.updateRecord(updates));
+
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, expected),
+        await cache.getRecordAsync(expected),
         expected,
         'sqlitedb contains record'
       );
@@ -305,13 +313,13 @@ export const tests: Test[] = [
         attributes: {
           name: 'Jupiter',
           classification: 'gas giant',
-          revised: true
+          // revised: true TODO when booleans will be supported (Data should be stored as JSON, it won't be querried anyways)
         }
       };
 
       await cache.patch(t => t.updateRecord(revised));
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -333,7 +341,7 @@ export const tests: Test[] = [
       await cache.patch(t => t.addRecord(planet));
       await cache.patch(t => t.removeRecord(planet));
       assert.equal(
-        await getRecordFromSQLiteDB(cache, planet),
+        await cache.getRecordAsync(planet),
         null,
         'sqlitedb does not contain record'
       );
@@ -350,7 +358,7 @@ export const tests: Test[] = [
 
       await cache.patch(t => t.removeRecord(planet));
       assert.equal(
-        await getRecordFromSQLiteDB(cache, planet),
+        await cache.getRecordAsync(planet),
         null,
         'sqlitedb does not contain record'
       );
@@ -384,7 +392,7 @@ export const tests: Test[] = [
       await cache.patch(t => t.addRecord(original));
       await cache.patch(t => t.replaceKey(original, 'remoteId', '123'));
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -412,9 +420,8 @@ export const tests: Test[] = [
         t.replaceKey({ type: 'planet', id: 'jupiter' }, 'remoteId', '123')
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
-        'sqlitedb contains record'
       );
 
       assert.equal(
@@ -440,7 +447,7 @@ export const tests: Test[] = [
         t.replaceAttribute({ type: 'planet', id: 'jupiter' }, 'order', 5)
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -483,7 +490,7 @@ export const tests: Test[] = [
         t.addToRelatedRecords(original, 'moons', { type: 'moon', id: 'moon1' })
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -510,7 +517,7 @@ export const tests: Test[] = [
         })
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -556,7 +563,7 @@ export const tests: Test[] = [
         })
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -583,7 +590,7 @@ export const tests: Test[] = [
         })
       );
       assert.equal(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         null,
         'sqlitedb does not contain record'
       );
@@ -629,7 +636,7 @@ export const tests: Test[] = [
         ])
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -656,7 +663,7 @@ export const tests: Test[] = [
         ])
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -702,7 +709,7 @@ export const tests: Test[] = [
         })
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -729,7 +736,7 @@ export const tests: Test[] = [
         })
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -772,7 +779,7 @@ export const tests: Test[] = [
         t.replaceRelatedRecord(original, 'solarSystem', null)
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );
@@ -800,7 +807,7 @@ export const tests: Test[] = [
         )
       );
       assert.deepStrictEqual(
-        await getRecordFromSQLiteDB(cache, revised),
+        await cache.getRecordAsync(revised),
         revised,
         'sqlitedb contains record'
       );

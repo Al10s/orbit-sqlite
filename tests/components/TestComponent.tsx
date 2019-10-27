@@ -37,7 +37,6 @@ export default class TestComponent extends React.Component<Props, State> {
   }
 
   render = () => {
-    console.log('TestComponent', 'render');
     return (
       <View
         style={{
