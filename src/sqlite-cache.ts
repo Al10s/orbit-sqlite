@@ -48,6 +48,7 @@ export type SQLiteDBLocation = 'default'|'Documents'|'Library'
 
 export interface SQLiteRecord {
   id: string;
+  __keys__: string;
 }
 
 export interface SQLiteCacheSettings extends AsyncRecordCacheSettings {
@@ -233,6 +234,7 @@ export default class SQLiteCache extends AsyncRecordCache {
       });
     }
     fieldsQuery.unshift('id TEXT NOT NULL PRIMARY KEY');
+    fieldsQuery.push('__keys__ TEXT');
     tx.executeSql(`CREATE TABLE ${type}(${fieldsQuery.join(',')})`);
   }
 
@@ -282,7 +284,13 @@ export default class SQLiteCache extends AsyncRecordCache {
     const attributes = { ...input };
     const id = attributes.id;
     delete attributes.id;
-    return { type, id, attributes: this._stripNull(attributes) };
+    const keys = attributes.__keys__;
+    delete attributes.__keys__;    
+    const record: Record = { type, id, attributes: this._stripNull(attributes) };
+    if (keys) {
+      record.keys = JSON.parse(keys);
+    }
+    return record;
   }
 
   getRecordAsync (record: RecordIdentity): Promise<Record|undefined> {
@@ -384,9 +392,10 @@ export default class SQLiteCache extends AsyncRecordCache {
       value: number|string;
     }
     log('SQLiteCache', '_setRecord called for', record);
-    const { id, type, attributes } = record;
+    const { id, type, attributes, keys } = record;
     const model = this.schema.getModel(type);
     const kv: KV[] = Object.keys(attributes).map((key: string) => ({ key, value: attributes[key] }));
+    kv.push({ key: '__keys__', value: keys ? JSON.stringify(keys) : null });
     log(model.attributes);
     if (shouldInsert) {
       kv.unshift({ key: 'id', value: id });
