@@ -1,68 +1,74 @@
 import React from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
+  View, ScrollView, Alert,
 } from 'react-native';
-import { RunnableTest } from './utils'
-import TestComponent from './components/TestComponent';
+import { RunnableTestSuite, TestContext, getFormattedDuration } from './utils'
 import styles from './styles';
-import { tests } from './tests';
-import { SQLiteCache } from '@al10s/react-native-orbit-sqlite';
-import { Schema } from '@orbit/data';
+import SuiteComponent from './components/SuiteComponent';
+import { suites } from './tests';
+import moment, { Moment } from 'moment';
 
 interface Props {}
 interface State {
-  tests: RunnableTest[];
+  suites: RunnableTestSuite<TestContext>[];
+  success: number;
+  failure: number;
 }
 
 export default class App extends React.Component <Props, State> {
+  start: Moment;
   constructor(props: Props) {
     super(props);
     this.state = {
-      tests: [],
+      suites: [],
+      success: 0,
+      failure: 0,
     };
+    this.start = moment()
   }
 
-  addNextTest () {
-    const index = this.state.tests.length;
-    if (index < tests.length) {
-      const test = tests[index];
-      test.emitter.on('done', () => {
-        this.addNextTest();
+  addNextSuite () {
+    const index = this.state.suites.length;
+    if (index < suites.length) {
+      const suite = suites[index];
+      suite.emitter.on('done', ({ success, failure }) => {
+        this.setState({
+          success: this.state.success + success,
+          failure: this.state.failure + failure,
+        });
+        this.addNextSuite();
       });
-      test.emitter.on('failed', () => {
-        this.addNextTest();
-      });
-      this.setState({ tests: [...this.state.tests].concat(test) });
+      this.setState({ suites: [...this.state.suites].concat(suite) });
+    }
+    else {
+      const success = this.state.success;
+      const failure = this.state.failure;
+      const total = success + failure;
+      const formattedDuration = getFormattedDuration(this.start, moment());
+      const successRatio = Math.floor(100 * success / total);
+      const failureRatio = Math.floor(100 * failure / total);
+      Alert.alert(
+        'Tests done',
+        `All ${total} tests have been done in ${formattedDuration}.` + 
+        `${success ? `\n${success} have succeeded (${successRatio}%).` : ''}` + 
+        `${failure ? `\n${failure} have failed (${failureRatio}%).` : ''}`
+      )
     }
   }
 
   componentDidMount () {
-    // TODO Handle test suites (before/after suite, beforeEach/afterEach unit)
-    // This should go in the before() CacheTest suite
-    const schema = new Schema();
-    const cache = new SQLiteCache({ schema });
-    cache.openDB()
-      .then(() => cache.deleteDB())
-      .then(() => this.addNextTest());
-    }
+    this.addNextSuite();
+  }
 
   render () {
     return (
       <View
         style={styles.root}>
-        <View
-          style={{ ...styles.row, ...styles.header_row }}>
-          <Text style={{ ...styles.cell, ...styles.header_cell, ...styles.label_cell }}>Label</Text>
-          <Text style={{ ...styles.cell, ...styles.header_cell, ...styles.result_cell }}>Result</Text>
-          <Text style={{ ...styles.cell, ...styles.header_cell, ...styles.duration_cell }}>Duration</Text>
-        </View>
         <ScrollView>
-          {this.state.tests.map((test: RunnableTest, key: number) => 
-            <TestComponent
+          {this.state.suites.map((suite: RunnableTestSuite<TestContext>, key: number) => 
+            <SuiteComponent
               key={key}
-              test={test}
+              suite={suite}
               />
           )}
         </ScrollView>

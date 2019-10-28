@@ -1,14 +1,16 @@
 import React from 'react';
-import { RunnableTest } from '../utils';
+import { RunnableTestUnit, TestContext, getFormattedDuration } from '../utils';
 import { View, Text } from 'react-native';
 import styles from '../styles';
 import moment from 'moment';
 
 export interface Props {
-  test: RunnableTest;
+  test: RunnableTestUnit<TestContext>;
+  beforeEach: () => Promise<TestContext>;
+  afterEach: (t: TestContext) => Promise<void>;
 }
 
-type Status = 'pending'|'processing'|'done'|'failed';
+export type Status = 'pending'|'processing'|'success'|'failure';
 
 interface State {
   status: Status;
@@ -16,7 +18,7 @@ interface State {
   duration: string;
 }
 
-export default class TestComponent extends React.Component<Props, State> {
+export default class UnitComponent extends React.Component<Props, State> {
   constructor (props: Props) {
     super(props);
     this.state = {
@@ -26,30 +28,29 @@ export default class TestComponent extends React.Component<Props, State> {
     };
   }
 
-  componentDidMount () {
+  async componentDidMount () {
     this.setState({ status: 'processing' });
+    const context = await this.props.beforeEach()
     const start = moment();
-    this.props.test.run()
-      .then(() => {
-        this.props.test.emitter.trigger('done');
-        this.setState({ status: 'done', result: 'PASSED' })
-      })
-      .catch((error: Error) => {
-        this.props.test.emitter.trigger('failed', { error });
-        this.setState({ status: 'failed', result: error.message });
-      })
-      .finally(() => {
-        const duration = moment().diff(start);
-        const format = duration > 60 * 1000 ? 'm:ss:SSS' : 's.SSS';
-        this.setState({ 'duration': moment.utc(duration).format(format) })
-      });
+    try {
+      await this.props.test.run(context)
+      this.props.test.emitter.trigger('success');
+      this.setState({ status: 'success', result: 'PASSED' })
+    }
+    catch (error) {
+      this.props.test.emitter.trigger('failure', { error });
+      this.setState({ status: 'failure', result: error.message });
+    }
+    this.setState({ duration: getFormattedDuration(start, moment()) })
+    await this.props.afterEach(context);
+    this.props.test.emitter.trigger('done')
   }
 
   render = () => {
     const rowStyle = (this.state.status === 'pending' ? styles.pending :
       (this.state.status === 'processing' ? styles.processing :
-        (this.state.status === 'done' ? styles.done :
-          styles.failed
+        (this.state.status === 'success' ? styles.success :
+          styles.failure
         )
       )
     );

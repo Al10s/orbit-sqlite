@@ -1,5 +1,6 @@
 import { ResultSet } from "react-native-sqlite-storage";
 import { SQLiteCache } from "@al10s/react-native-orbit-sqlite";
+import moment, { Moment } from "moment";
 
 export class EventEmitter {
   private handlers: { [index: string]: ((args?: object) => void)[] } = {};
@@ -24,12 +25,27 @@ export class EventEmitter {
   }
 }
 
-export interface Test {
-  run: () => Promise<void>;
+export interface TestContext {}
+
+export interface TestUnit<T extends TestContext> {
+  run: (context: T) => Promise<void>;
   label: string;
 }
 
-export type RunnableTest = Test & {
+export type RunnableTestUnit<T> = TestUnit<T> & {
+  emitter: EventEmitter;
+}
+
+export interface TestSuite<T extends TestContext> {
+  beforeEach: () => Promise<T>;
+  afterEach: (context: T) => Promise<void>;
+  before: () => Promise<void>;
+  after: () => Promise<void>;
+  units: RunnableTestUnit<T>[];
+  name: string;
+}
+
+export type RunnableTestSuite<T> = TestSuite<T> & {
   emitter: EventEmitter;
 }
 
@@ -57,4 +73,14 @@ const logSQLiteDBContent = async ({ cache }: { cache: SQLiteCache }) => {
     const [ tableContent ] = await db.executeSql(`SELECT * FROM ${tableName}`);
     console.log(tableName, rsToArray(tableContent))
   }
+}
+
+export const getFormattedDuration = (start: Moment, end: Moment): string => {
+  const duration = end.diff(start);
+  const format = duration > 60 * 60 * 1000 ?
+                  'h:mm:ss:SSS' :
+                  duration > 60 * 1000 ?
+                    'm:ss:SSS' :
+                    's.SSS';
+  return moment.utc(duration).format(format);
 }

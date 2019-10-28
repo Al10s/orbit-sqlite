@@ -1,15 +1,17 @@
-import { Test } from '../../utils';
+import { TestUnit, EventEmitter, RunnableTestUnit, TestSuite, TestContext } from '../../utils';
 import { Schema, KeyMap, Record } from '@orbit/data';
 import { SQLiteCache } from '@al10s/react-native-orbit-sqlite';
 import assert from 'assert';
 
-interface Context {
+interface Context extends TestContext {
   schema: Schema;
   cache: SQLiteCache;
   keyMap: KeyMap;
 }
 
-const beforeEach = async () => {
+const before = async (): Promise<void> => {}
+
+const beforeEach = async (): Promise<Context> => {
   const schema = new Schema({
     models: {
       planet: {
@@ -54,8 +56,8 @@ const beforeEach = async () => {
   });
   const keyMap = new KeyMap();
   const cache = new SQLiteCache({ schema, keyMap });
-  await cache.openDB()
-    .then(() => cache.closeDB());
+  await cache.openDB(); // To create db
+  await cache.closeDB();
   return {
     schema,
     keyMap,
@@ -63,36 +65,32 @@ const beforeEach = async () => {
   };
 }
 
-const afterEach = async (context: Context) => {
+const afterEach = async (context: Context): Promise<void> => {
   return context.cache.deleteDB();
 }
 
-const runner = (run: (context: Context) => Promise<void>): (() => Promise<void>) => async (): Promise<void> => {
-  const context = await beforeEach();
-  await run(context);
-  await afterEach(context);
-}
+const after = async (): Promise<void> => {}
 
-export const tests: Test[] = [
+const units: RunnableTestUnit<Context>[] = [
   {
-    label: 'Cache exists',
-    run: runner(async (context: Context) => {
+    label: 'exists',
+    run: async (context: Context) => {
       const { cache, schema, keyMap } = context;
       assert.ok(cache, 'cache exists');
       assert.strictEqual(cache.schema, schema, 'schema has been assigned');
       assert.strictEqual(cache.keyMap, keyMap, 'keyMap has been assigned');
-    }),
+    },
   },
   {
-    label: 'Cache is assigned a default dbName',
-    run: runner(async (context: Context) => {
+    label: 'is assigned a default dbName',
+    run: async (context: Context) => {
       const { cache } = context;
       assert.equal(cache.dbName, 'sqlite', '`dbName` is `sqlite` by default');
-    }),
+    },
   },
   {
-    label: 'Cache: sets/gets records individually',
-    run: runner(async (context: Context) => {
+    label: 'sets/gets records individually',
+    run: async (context: Context) => {
       const { cache } = context;
       const jupiter = {
         type: 'planet',
@@ -121,11 +119,11 @@ export const tests: Test[] = [
       assert.deepStrictEqual(await cache.getRecordAsync(jupiter), undefined);
       assert.deepStrictEqual(await cache.getRecordAsync(io), undefined);
       assert.deepStrictEqual(await cache.getRecordAsync(europa), undefined);
-    }),
+    },
   },
   {
-    label: 'Cache: sets/gets records in bulk',
-    run: runner(async (context: Context) => {
+    label: 'sets/gets records in bulk',
+    run: async (context: Context) => {
       const { cache } = context;
       const jupiter = {
         type: 'planet',
@@ -150,11 +148,11 @@ export const tests: Test[] = [
       await cache.removeRecordsAsync([jupiter, io, europa]);
 
       assert.deepStrictEqual(await cache.getRecordsAsync([jupiter, io, europa]), []);
-    }),
+    },
   },
   {
-    label: 'Cache: sets/gets inverse relationships',
-    run: runner(async (context: Context) => {
+    label: 'sets/gets inverse relationships',
+    run: async (context: Context) => {
       const { cache } = context;
       const jupiter = { type: 'planet', id: 'jupiter' };
       const io = { type: 'moon', id: 'io' };
@@ -194,11 +192,11 @@ export const tests: Test[] = [
         [],
         'inverse relationships have been removed'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - addRecord',
-    run: runner(async (context: Context) => {
+    label: '#patch - addRecord',
+    run: async (context: Context) => {
       const { cache, keyMap } = context;
       const planet: Record = {
         type: 'planet',
@@ -224,11 +222,11 @@ export const tests: Test[] = [
         'jupiter',
         'key has been mapped'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - updateRecord',
-    run: runner(async (context: Context) => {
+    label: '#patch - updateRecord',
+    run: async (context: Context) => {
       const { cache, keyMap } = context;
       const original: Record = {
         type: 'planet',
@@ -292,11 +290,11 @@ export const tests: Test[] = [
         'jupiter',
         'key has been mapped'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - updateRecord - when record does not exist',
-    run: runner(async (context: Context) => {
+    label: '#patch - updateRecord - when record does not exist',
+    run: async (context: Context) => {
       const { cache } = context;
       const revised = {
         type: 'planet',
@@ -314,11 +312,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - removeRecord',
-    run: runner(async (context: Context) => {
+    label: '#patch - removeRecord',
+    run: async (context: Context) => {
       const { cache } = context;
       const planet: Record = {
         type: 'planet',
@@ -336,11 +334,11 @@ export const tests: Test[] = [
         null,
         'sqlitedb does not contain record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - removeRecord - when record does not exist',
-    run: runner(async (context: Context) => {
+    label: '#patch - removeRecord - when record does not exist',
+    run: async (context: Context) => {
       const { cache } = context;
       const planet = {
         type: 'planet',
@@ -353,11 +351,11 @@ export const tests: Test[] = [
         null,
         'sqlitedb does not contain record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - replaceKey',
-    run: runner(async (context: Context) => {
+    label: '#patch - replaceKey',
+    run: async (context: Context) => {
       const { cache, keyMap } = context;
       const original: Record = {
         type: 'planet',
@@ -393,11 +391,11 @@ export const tests: Test[] = [
         'jupiter',
         'key has been mapped'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - replaceKey - when base record does not exist',
-    run: runner(async (context: Context) => {
+    label: '#patch - replaceKey - when base record does not exist',
+    run: async (context: Context) => {
       const { cache, keyMap } = context;
       const revised: Record = {
         type: 'planet',
@@ -420,11 +418,11 @@ export const tests: Test[] = [
         'jupiter',
         'key has been mapped'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - replaceAttribute - when base record does not exist',
-    run: runner(async (context: Context) => {
+    label: '#patch - replaceAttribute - when base record does not exist',
+    run: async (context: Context) => {
       const { cache } = context;
       const revised: Record = {
         type: 'planet',
@@ -443,11 +441,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - addToRelatedRecords',
-    run: runner(async (context: Context) => {
+    label: '#patch - addToRelatedRecords',
+    run: async (context: Context) => {
       const { cache } = context;
       const original: Record = {
         type: 'planet',
@@ -486,11 +484,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - addToRelatedRecords - when base record does not exist',
-    run: runner(async (context: Context) => {
+    label: '#patch - addToRelatedRecords - when base record does not exist',
+    run: async (context: Context) => {
       const { cache } = context;
       const revised: Record = {
         type: 'planet',
@@ -513,11 +511,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - removeFromRelatedRecords',
-    run: runner(async (context: Context) => {
+    label: '#patch - removeFromRelatedRecords',
+    run: async (context: Context) => {
       const { cache } = context;
       const original: Record = {
         type: 'planet',
@@ -560,11 +558,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - removeFromRelatedRecords - when base record does not exist',
-    run: runner(async (context: Context) => {
+    label: '#patch - removeFromRelatedRecords - when base record does not exist',
+    run: async (context: Context) => {
       const { cache } = context;
       const revised: Record = {
         type: 'planet',
@@ -587,11 +585,11 @@ export const tests: Test[] = [
         null,
         'sqlitedb does not contain record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - replaceRelatedRecords',
-    run: runner(async (context: Context) => {
+    label: '#patch - replaceRelatedRecords',
+    run: async (context: Context) => {
       const { cache } = context;
       const original: Record = {
         type: 'planet',
@@ -633,11 +631,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - replaceRelatedRecords - when base record does not exist',
-    run: runner(async (context: Context) => {
+    label: '#patch - replaceRelatedRecords - when base record does not exist',
+    run: async (context: Context) => {
       const { cache } = context;
       const revised: Record = {
         type: 'planet',
@@ -660,11 +658,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - replaceRelatedRecord - with record',
-    run: runner(async (context: Context) => {
+    label: '#patch - replaceRelatedRecord - with record',
+    run: async (context: Context) => {
       const { cache } = context;
       const original: Record = {
         type: 'planet',
@@ -706,11 +704,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - replaceRelatedRecord - with record - when base record does not exist',
-    run: runner(async (context: Context) => {
+    label: '#patch - replaceRelatedRecord - with record - when base record does not exist',
+    run: async (context: Context) => {
       const { cache } = context;
       const revised: Record = {
         type: 'planet',
@@ -733,11 +731,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - replaceRelatedRecord - with null',
-    run: runner(async (context: Context) => {
+    label: '#patch - replaceRelatedRecord - with null',
+    run: async (context: Context) => {
       const { cache } = context;
       const original: Record = {
         type: 'planet',
@@ -777,11 +775,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #patch - replaceRelatedRecord - with null - when base record does not exist',
-    run: runner(async (context: Context) => {
+    label: '#patch - replaceRelatedRecord - with null - when base record does not exist',
+    run: async (context: Context) => {
       const { cache } = context;
       const revised: Record = {
         type: 'planet',
@@ -806,11 +804,11 @@ export const tests: Test[] = [
         revised,
         'sqlitedb contains record'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #query - all records',
-    run: runner(async (context: Context) => {
+    label: '#query - all records',
+    run: async (context: Context) => {
       const { cache, keyMap } = context;
       const earth: Record = {
         type: 'planet',
@@ -878,11 +876,11 @@ export const tests: Test[] = [
         'io',
         'key has been mapped'
       );
-    }),
+    },
   },
   {
-    label: 'Cache: #query - records of one type',
-    run: runner(async (context: Context) => {
+    label: '#query - records of one type',
+    run: async (context: Context) => {
       const { cache } = context;
       const earth: Record = {
         type: 'planet',
@@ -918,11 +916,11 @@ export const tests: Test[] = [
 
       const records = await cache.query(q => q.findRecords('planet'));
       assert.deepStrictEqual(records, [earth, jupiter], 'query results are expected');
-    }),
+    },
   },
   {
-    label: 'Cache: #query - records by identity',
-    run: runner(async (context: Context) => {
+    label: '#query - records by identity',
+    run: async (context: Context) => {
       const { cache } = context;
       const earth: Record = {
         type: 'planet',
@@ -960,11 +958,11 @@ export const tests: Test[] = [
         q.findRecords([earth, io, { type: 'planet', id: 'FAKE' }])
       );
       assert.deepStrictEqual(records, [earth, io], 'only matches are returned');
-    }),
+    },
   },
   {
-    label: 'Cache: #query - a specific record',
-    run: runner(async (context: Context) => {
+    label: '#query - a specific record',
+    run: async (context: Context) => {
       const { cache, keyMap } = context;
       const earth: Record = {
         type: 'planet',
@@ -1013,6 +1011,15 @@ export const tests: Test[] = [
         'jupiter',
         'key has been mapped'
       );
-    }),
+    },
   },
-];
+].map((t: TestUnit<Context>) => ({ ...t, emitter: new EventEmitter() }));
+
+export const suite: TestSuite<Context> = {
+  name: 'Cache',
+  units,
+  beforeEach,
+  afterEach,
+  before,
+  after,
+}

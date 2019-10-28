@@ -1,9 +1,11 @@
-import { RunnableTest, EventEmitter } from "../utils";
+import { EventEmitter, RunnableTestSuite } from "../utils";
 
-import { tests as CacheTests } from './cache'
+import { suite as CacheSuite } from './cache'
 
-const getTests = (): RunnableTest[] => {
-  return CacheTests.map(t => ({ ...t, emitter: new EventEmitter() }));
+const getTestSuites = (): RunnableTestSuite<any>[] => {
+  return [
+    CacheSuite,
+  ].map(t => ({ ...t, emitter: new EventEmitter() }))
 }
 
-export const tests = getTests();
+export const suites = getTestSuites();

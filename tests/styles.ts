@@ -31,10 +31,10 @@ const styles = StyleSheet.create({
   processing: {
     backgroundColor: 'orange',
   },
-  done: {
+  success: {
     backgroundColor: 'green',
   },
-  failed: {
+  failure: {
     backgroundColor: 'red',
   },
   label_cell: {
@@ -46,6 +46,21 @@ const styles = StyleSheet.create({
   duration_cell: {
     flex: 1,
     textAlign: 'right'
+  },
+  suite_title: {
+    fontWeight: 'bold',
+    fontSize: 26,
+    backgroundColor: '#ccccff',
+    paddingLeft: 10,
+    paddingRight: 10,
+  },
+  suite_summary: {
+    backgroundColor: '#ccccff',
+    marginBottom: 20,
+  },
+  suite_summary_text: {
+    paddingLeft: 10,
+    paddingRight: 10,
   },
 });
 
