@@ -1,14 +1,13 @@
 # react-native-orbit-sqlite
 
-
 Allows creating a source of [react-native-sqlite-storage](https://github.com/andpor/react-native-sqlite-storage) for [Orbit.js](https://github.com/orbitjs/orbit)@0.16.x.
 
 
 ## Disclaimer
 
-The current content of this repo is still under development and has not yet been tested (especially the relationships part). Use it at your own risks.
+The current content of this repo is still under development and has not yet been fully tested. Use it at your own risks.
 
-I *may* try to to improve it and to add tests later.
+I *may* try to to improve it later.
 
 I will bump the PATCH version for every new fix that occurs, but the MINOR will stay at 0 until the whole content has been fully approved.
 
@@ -82,4 +81,59 @@ import { QueryBuilder } from '@orbit/data';
 initDb()
   .then(() => memory.query((q: QueryBuilder) => q.findRecords('example')))
   .then((examples) => { console.log(examples); });
+```
+
+
+## Tests
+
+I created a little React Native app in order to execute the tests. It is located under the `/tests` directory.
+
+First of all, install the node modules.
+
+```bash
+# Location : <project>/tests/
+yarn install
+```
+
+The tested code is the one published on npm.
+
+To test modifications of the code, we will need to replace the tested code as follows :
+
+```bash
+# Location : <project>/
+yarn run tsc # Compile the TypeScript code into JavaScript
+rm tests/node_modules/@al10s/react-native-orbit-sqlite/dist/* # Delete the published code that is tested
+cp dist/* tests/node_modules/@al10s/react-native-orbit-sqlite/dist/ # Copy the compiled code instead
+```
+
+### Android
+
+You will need to add a valid `debug.keystore` in `android/app/`.
+
+If you ever worked with Android Studio, there's a chance that one is located under the `.android` folder.
+
+```bash
+cp ~/.android/debug.keystore <project>/tests/android/app/
+```
+
+Then you can start a metro server
+
+```bash
+# Location : <project>/tests/
+yarn start
+```
+Then you are ready to test it on your device (or in a VM)
+
+```bash
+# Location : <project>/tests/
+yarn run android
+```
+
+### iOS
+
+I don't own a Mac so I can't test it yet, but if you know the procedure to follow you can tell me and I will change it if needed.
+
+```bash
+# Location : <project>/tests/
+yarn run ios
 ```
