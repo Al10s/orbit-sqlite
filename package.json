@@ -1,6 +1,6 @@
 {
   "name": "@al10s/react-native-orbit-sqlite",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Support of React Native SQLite storage for Orbit.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

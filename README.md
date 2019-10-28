@@ -5,9 +5,7 @@ Allows creating a source of [react-native-sqlite-storage](https://github.com/and
 
 ## Disclaimer
 
-The current content of this repo is still under development and has not yet been fully tested. Use it at your own risks.
-
-I *may* try to to improve it later.
+The current content of this repo should be safe to use, but may not be actively maintained. Use it at your own risks.
 
 I will bump the PATCH version for every new fix that occurs, but the MINOR will stay at 0 until the whole content has been fully approved.
 
