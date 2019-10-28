@@ -1,10 +1,12 @@
 import { EventEmitter, RunnableTestSuite } from "../utils";
 
-import { suite as CacheSuite } from './cache'
+import { suite as CacheTestSuite } from './cache'
+import { suite as SourceTestSuite } from './source'
 
 const getTestSuites = (): RunnableTestSuite<any>[] => {
   return [
-    CacheSuite,
+    SourceTestSuite,
+    CacheTestSuite,
   ].map(t => ({ ...t, emitter: new EventEmitter() }))
 }
 

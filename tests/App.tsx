@@ -31,7 +31,7 @@ export default class App extends React.Component <Props, State> {
     const index = this.state.suites.length;
     if (index < suites.length) {
       const suite = suites[index];
-      suite.emitter.on('done', ({ success, failure }) => {
+      suite.emitter.on('done', ({ success, failure }: any) => {
         this.setState({
           success: this.state.success + success,
           failure: this.state.failure + failure,
@@ -49,7 +49,8 @@ export default class App extends React.Component <Props, State> {
       const failureRatio = Math.floor(100 * failure / total);
       Alert.alert(
         'Tests done',
-        `All ${total} tests have been done in ${formattedDuration}.` + 
+        `All ${total} tests have been done.` +
+        `\nTotal duration: ${formattedDuration}.` + 
         `${success ? `\n${success} have succeeded (${successRatio}%).` : ''}` + 
         `${failure ? `\n${failure} have failed (${failureRatio}%).` : ''}`
       )

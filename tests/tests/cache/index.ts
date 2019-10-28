@@ -56,8 +56,6 @@ const beforeEach = async (): Promise<Context> => {
   });
   const keyMap = new KeyMap();
   const cache = new SQLiteCache({ schema, keyMap });
-  await cache.openDB(); // To create db
-  await cache.closeDB();
   return {
     schema,
     keyMap,
@@ -66,14 +64,15 @@ const beforeEach = async (): Promise<Context> => {
 }
 
 const afterEach = async (context: Context): Promise<void> => {
-  return context.cache.deleteDB();
+  const { cache } = context;
+  return cache.deleteDB();
 }
 
 const after = async (): Promise<void> => {}
 
 const units: RunnableTestUnit<Context>[] = [
   {
-    label: 'exists',
+    label: 'it exists',
     run: async (context: Context) => {
       const { cache, schema, keyMap } = context;
       assert.ok(cache, 'cache exists');
@@ -1016,7 +1015,7 @@ const units: RunnableTestUnit<Context>[] = [
 ].map((t: TestUnit<Context>) => ({ ...t, emitter: new EventEmitter() }));
 
 export const suite: TestSuite<Context> = {
-  name: 'Cache',
+  name: 'SQLiteCache',
   units,
   beforeEach,
   afterEach,
