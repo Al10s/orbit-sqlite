@@ -8,7 +8,7 @@ import { RunnableTest } from './utils'
 import TestComponent from './components/TestComponent';
 import styles from './styles';
 import { tests } from './tests';
-import { SQLiteCache } from './dist';
+import { SQLiteCache } from '@al10s/react-native-orbit-sqlite';
 import { Schema } from '@orbit/data';
 
 interface Props {}
