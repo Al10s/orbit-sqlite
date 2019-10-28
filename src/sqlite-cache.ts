@@ -175,6 +175,7 @@ export default class SQLiteCache extends AsyncRecordCache {
   }
 
   async deleteDB (): Promise<void> {
+    await this.openDB();
     await this.closeDB();
     await SQLite.deleteDatabase({ name: this.dbName, location: this.location });
   }
