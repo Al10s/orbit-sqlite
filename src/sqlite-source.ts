@@ -18,7 +18,7 @@ import Orbit, {
   UpdateRecordOperation,
   Record
 } from '@orbit/data';
-import { supportsSQLite, log } from './utils';
+import { supportsSQLite } from './utils';
 import SQLiteCache, { SQLiteCacheSettings } from './sqlite-cache';
 
 const { assert, deprecate } = Orbit;
@@ -54,7 +54,6 @@ export default class SQLiteSource extends Source
   ) => Promise<Transform[]>;
 
   constructor (settings: SQLiteSourceSettings = {}) {
-    log('SQLiteSource', 'constructor called with params', settings);
     assert(
       "SQLiteSource's `schema` must be specified in `settings.schema` constructor argument",
       !!settings.schema
@@ -65,13 +64,11 @@ export default class SQLiteSource extends Source
 
     super(settings);
 
-    let cacheSettings: SQLiteCacheSettings = settings.cacheSettings || {};
+    let cacheSettings: SQLiteCacheSettings = settings.cacheSettings || {} as SQLiteCacheSettings;
     cacheSettings.schema = settings.schema;
     cacheSettings.keyMap = settings.keyMap;
-    cacheSettings.queryBuilder =
-      cacheSettings.queryBuilder || this.queryBuilder;
-    cacheSettings.transformBuilder =
-      cacheSettings.transformBuilder || this.transformBuilder;
+    cacheSettings.queryBuilder = cacheSettings.queryBuilder || this.queryBuilder;
+    cacheSettings.transformBuilder = cacheSettings.transformBuilder || this.transformBuilder;
     cacheSettings.namespace = cacheSettings.namespace || settings.namespace;
     cacheSettings.location = cacheSettings.location || settings.location;
 
@@ -83,12 +80,10 @@ export default class SQLiteSource extends Source
   }
 
   async upgrade (): Promise<void> {
-    log('SQLiteSource', 'upgrade called');
     await this._cache.reopenDB();
   }
 
   closeDB () {
-    log('SQLiteSource', 'closeDB called');
     deprecate('`closeDB()` must be called as `cache.closeDB()`.');
     return this.cache.closeDB();
   }
@@ -98,7 +93,6 @@ export default class SQLiteSource extends Source
   /////////////////////////////////////////////////////////////////////////////
 
   async reset (): Promise<void> {
-    log('SQLiteSource', 'reset called');
     await this._cache.reset();
   }
 
@@ -107,7 +101,6 @@ export default class SQLiteSource extends Source
   /////////////////////////////////////////////////////////////////////////////
 
   async _sync (transform: Transform): Promise<void> {
-    log('SQLiteSource', '_sync called with params', transform);
     if (!this.transformLog.contains(transform.id)) {
       await this._cache.patch(transform.operations as RecordOperation[]);
       await this.transformed([transform]);
@@ -119,7 +112,6 @@ export default class SQLiteSource extends Source
   /////////////////////////////////////////////////////////////////////////////
 
   async _push (transform: Transform): Promise<Transform[]> {
-    log('SQLiteSource', '_push called with params', transform);
     let results: Transform[];
 
     if (!this.transformLog.contains(transform.id)) {
@@ -139,7 +131,6 @@ export default class SQLiteSource extends Source
   /////////////////////////////////////////////////////////////////////////////
 
   async _pull(query: Query): Promise<Transform[]> {
-    log('SQLiteSource', '_pull called with params', query);
     let operations: Operation[];
 
     const results = await this._cache.query(query);

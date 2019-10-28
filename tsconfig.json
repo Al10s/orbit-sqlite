@@ -9,7 +9,8 @@
     "declaration": true,                      /* Generates corresponding '.d.ts' file. */
     "newLine": "LF",
     "outDir": "./dist",                       /* Redirect output structure to the directory. */
-    "noImplicitAny": true                     /* Raise error on expressions and declarations with an implied 'any' type. */
+    "noImplicitAny": true,                    /* Raise error on expressions and declarations with an implied 'any' type. */
+    "allowSyntheticDefaultImports": true      /* Allow default imports from modules with no default export. This does not affect code emit, just typechecking. */
   },
   "include": [
     "src/**/*.ts"
