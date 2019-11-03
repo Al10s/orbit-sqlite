@@ -1013,61 +1013,6 @@ const units: RunnableTestUnit<Context>[] = [
     },
   },
   {
-    label: 'upgrade to v1 works as intended',
-    run: async (context: Context) => {
-      await context.cache.deleteDB();
-      const { schema, keyMap } = context;
-      const dbv0 = await version0.createDBForSchema(schema);
-
-      const jupiter = {
-        type: 'planet',
-        id: 'jupiter',
-        attributes: { name: 'Jupiter' },
-        relationships: {
-          moons: {
-            data: [
-              { type: 'moon', id: 'europa' },
-              { type: 'moon', id: 'io' },
-            ]
-          }
-        }
-      };
-      const europa = {
-        type: 'moon',
-        id: 'europa',
-        attributes: { name: 'Europa' },
-        relationships: { planet: { data: { type: 'planet', id: 'jupiter' } } }
-      };
-      const io = { 
-        type: 'moon',
-        id: 'io',
-        attributes: { name: 'Io' },
-        relationships: { planet: { data: { type: 'planet', id: 'jupiter' } } },
-      };
-
-      await version0.insertRecords([ jupiter, io, europa ], schema, dbv0);
-      await dbv0.close();
-
-      const cache = new SQLiteCache({ schema, keyMap });
-
-      const db = await cache.openDB();
-      const [res] = await db.executeSql(`SELECT version FROM '__RN_ORBIT_SQLITE_VERSION__'`);
-      assert(res.rows.length === 1, 'there is an internal version');
-      const { version } = res.rows.item(0);
-      assert(version === VERSION, 'the internal version is correct');
-
-      assert.deepStrictEqual(await cache.getRecordAsync(jupiter), jupiter);
-      assert.deepStrictEqual(await cache.getRecordAsync(io), io);
-      assert.deepStrictEqual(await cache.getRecordAsync(europa), europa);
-
-      const [planets] = await db.executeSql(`SELECT * FROM 'planet' WHERE id=?`, ['jupiter']);
-      assert.deepStrictEqual(planets.rows.length, 1)
-      assert.deepStrictEqual(planets.rows.item(0), { id: 'jupiter', attributes: JSON.stringify(jupiter.attributes), keys: null })
-
-      context.cache = cache;
-    },
-  },
-  {
     label: 'allows records with multiple relationships to the same model',
     run: async (context: Context) => {
       const schema = new Schema({
@@ -1105,9 +1050,9 @@ const units: RunnableTestUnit<Context>[] = [
         relationships: {
           moons: { 
             data: [
-              { type: 'moon', id: 'io' },
               { type: 'moon', id: 'europa' },
               { type: 'moon', id: 'ganymede' },
+              { type: 'moon', id: 'io' },
             ]
           },
           biggestMoon: { data: { type: 'moon', id: 'ganymede' } },
@@ -1208,6 +1153,64 @@ const units: RunnableTestUnit<Context>[] = [
       assert.deepStrictEqual(await cache.getRecordAsync(mercury), undefined);
       assert.deepStrictEqual(await cache.getRecordAsync(venus), undefined);
       assert.deepStrictEqual(await cache.getRecordAsync(earth), undefined);
+    },
+  },
+  {
+    label: 'upgrades work as intended',
+    run: async (context: Context) => {
+      await context.cache.deleteDB();
+      const { schema, keyMap } = context;
+      const dbv0 = await version0.createDBForSchema(schema);
+
+      const jupiter = {
+        type: 'planet',
+        id: 'jupiter',
+        attributes: { name: 'Jupiter' },
+        relationships: {
+          moons: {
+            data: [
+              { type: 'moon', id: 'europa' },
+              { type: 'moon', id: 'io' },
+            ]
+          }
+        }
+      };
+      const europa = {
+        type: 'moon',
+        id: 'europa',
+        attributes: { name: 'Europa' },
+        relationships: { planet: { data: { type: 'planet', id: 'jupiter' } } }
+      };
+      const io = { 
+        type: 'moon',
+        id: 'io',
+        attributes: { name: 'Io' },
+        relationships: { planet: { data: { type: 'planet', id: 'jupiter' } } },
+      };
+
+      await version0.insertRecords([ jupiter, io, europa ], schema, dbv0);
+      await dbv0.close();
+
+      const cache = new SQLiteCache({ schema, keyMap });
+
+      const db = await cache.openDB();
+      const [res] = await db.executeSql(`SELECT version FROM '__RN_ORBIT_SQLITE_VERSION__'`);
+      assert(res.rows.length === 1, 'there is an internal version');
+      const { version } = res.rows.item(0);
+      assert(version === VERSION, 'the internal version is correct');
+
+      assert.deepStrictEqual(await cache.getRecordAsync(jupiter), jupiter);
+      assert.deepStrictEqual(await cache.getRecordAsync(io), io);
+      assert.deepStrictEqual(await cache.getRecordAsync(europa), europa);
+
+      const [planets] = await db.executeSql(`SELECT * FROM 'planet' WHERE id=?`, ['jupiter']);
+      assert.deepStrictEqual(planets.rows.length, 1, 'there is still one item in db')
+      assert.deepStrictEqual(planets.rows.item(0), { id: 'jupiter', attributes: JSON.stringify(jupiter.attributes), keys: null }, 'the item is well formed')
+
+      const [ tbl ] = await db.executeSql(`SELECT name FROM 'sqlite_master' WHERE type=? AND name LIKE ?`, [ 'table', 'relationships%' ]);
+      assert.deepStrictEqual(tbl.rows.length, 0, 'former relationship tables have been dropped')
+
+      context.cache = cache;
     },
   },
 ].map((t: TestUnit<Context>) => ({ ...t, emitter: new EventEmitter() }));
