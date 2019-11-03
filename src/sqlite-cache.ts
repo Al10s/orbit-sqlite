@@ -22,12 +22,19 @@ import { Dict } from '@orbit/utils';
 const { assert } = Orbit;
 
 const VERSION_TABLE_NAME = '__VERSION__';
+const INTERNAL_VERSION_TABLE_NAME = '__RN_ORBIT_SQLITE_VERSION__';
+const ID_FIELD_NAME = 'id';
+const ATTRIBUTES_FIELD_NAME = 'attributes';
+const KEYS_FIELD_NAME = 'keys';
+
+export const VERSION = 1;
 
 export type SQLiteDBLocation = 'default'|'Documents'|'Library'
 
 export interface SQLiteRecord {
   id: string;
-  __keys__: string;
+  attributes: any,
+  keys: any;
 }
 
 export interface SQLiteCacheSettings extends AsyncRecordCacheSettings {
@@ -106,6 +113,7 @@ export default class SQLiteCache extends AsyncRecordCache {
       const newVersion = this.dbVersion;
       const db = await SQLite.openDatabase({ name: this.dbName, location: this.location })
       this._db = db;
+
       const [ res ] = await db.executeSql(
         `SELECT *
           FROM 'sqlite_master'
@@ -117,6 +125,26 @@ export default class SQLiteCache extends AsyncRecordCache {
         await this.createDB(db, newVersion);
       }
       else {
+        const [ res ] = await db.executeSql(
+          `SELECT *
+            FROM 'sqlite_master'
+            WHERE type=?
+            AND name=?`,
+          [ 'table', INTERNAL_VERSION_TABLE_NAME ]
+        );
+        let currentInternalVersion = 0;
+        if (res.rows.length !== 0) {
+          const [ versions ] = await db.executeSql(
+            `SELECT *
+              FROM '${VERSION_TABLE_NAME}'`
+          );
+          currentInternalVersion = versions.rows.item(0).version;
+        }
+
+        if (currentInternalVersion < VERSION) {
+          await this.migrateDBInternalFrom(currentInternalVersion, db);
+        }
+
         const [ versions ] = await db.executeSql(
           `SELECT *
             FROM '${VERSION_TABLE_NAME}'`
@@ -148,6 +176,8 @@ export default class SQLiteCache extends AsyncRecordCache {
     await db.transaction((tx: Transaction) => {
       tx.executeSql(`CREATE TABLE '${VERSION_TABLE_NAME}'('version' NUMERIC)`);
       this.setVersion(version, tx);
+      tx.executeSql(`CREATE TABLE '${INTERNAL_VERSION_TABLE_NAME}'('version' NUMERIC)`);
+      this.setInternalVersion(VERSION, tx);
       for (const model of Object.keys(this.schema.models)) {
         this._createModelTable(model, tx);
         this._createRelationshipTables(model, tx);
@@ -164,10 +194,54 @@ export default class SQLiteCache extends AsyncRecordCache {
     );
   }
 
+  async migrateDBInternalTo1 (db: SQLiteDatabase) {
+    const existingData: Dict<any[]> = {};
+    for (const model of Object.keys(this.schema.models)) {
+      const [ res ] = await db.executeSql(`SELECT * FROM '${model}'`);
+      const content = rsToArray(res);
+      existingData[model] = content.map((item) => {
+        const { id, __keys__, ...attributes } = item;
+        return { id, attributes: JSON.stringify(stripNullFields(attributes)), keys: __keys__ };
+      })
+    }
+    await db.transaction((tx: Transaction) => {
+      for (const [ model, items ] of Object.entries(existingData)) {
+        tx.executeSql(`DROP TABLE '${model}'`);
+        this._createModelTable(model, tx);
+        for (const { id, attributes, keys } of items) {
+          tx.executeSql(
+            `INSERT INTO '${model}'
+            ('id', 'attributes', 'keys')
+            VALUES (?, ?, ?)`,
+            [ id, attributes, keys ]
+          );
+        }
+      }
+      tx.executeSql(`CREATE TABLE '${INTERNAL_VERSION_TABLE_NAME}'('version' NUMERIC)`);
+      this.setInternalVersion(1, tx);
+    });
+  }
+
+  async migrateDBInternalFrom (currentInternalVersion: number, db: SQLiteDatabase) {
+    if (currentInternalVersion < 1) {
+      await this.migrateDBInternalTo1(db);
+    }
+  }
+
   setVersion (version: number, tx: Transaction) {
     tx.executeSql(`DELETE FROM '${VERSION_TABLE_NAME}'`)
     tx.executeSql(
       `INSERT INTO '${VERSION_TABLE_NAME}'
+        ('version')
+        VALUES(?)`,
+      [ version ]
+    );
+  }
+
+  setInternalVersion (version: number, tx: Transaction) {
+    tx.executeSql(`DELETE FROM '${INTERNAL_VERSION_TABLE_NAME}'`)
+    tx.executeSql(
+      `INSERT INTO '${INTERNAL_VERSION_TABLE_NAME}'
         ('version')
         VALUES(?)`,
       [ version ]
@@ -180,23 +254,12 @@ export default class SQLiteCache extends AsyncRecordCache {
     await SQLite.deleteDatabase({ name: this.dbName, location: this.location });
   }
 
-  // TODO create a single JSON field for the attributes
   private _createModelTable (type: string, tx: Transaction) {
-    const { attributes } = this.schema.getModel(type);
-    let fieldsQuery: string[] = [];
-    if (attributes !== undefined) {
-      fieldsQuery = Object.keys(attributes).map((attributeKey: string) => {
-        const attributeType = attributes[attributeKey].type;
-        switch (attributeType) {
-          case 'number':
-            return `'${attributeKey}' NUMERIC`;
-          default:
-            return `'${attributeKey}' TEXT`;
-        }
-      });
-    }
-    fieldsQuery.unshift(`'id' TEXT NOT NULL PRIMARY KEY`);
-    fieldsQuery.push(`'__keys__' TEXT`);
+    let fieldsQuery: string[] = [
+      `'${ID_FIELD_NAME}' TEXT NOT NULL PRIMARY KEY`,
+      `'${ATTRIBUTES_FIELD_NAME}' TEXT`,
+      `'${KEYS_FIELD_NAME}' TEXT`,
+    ];
     tx.executeSql(`CREATE TABLE '${type}'(${fieldsQuery.join(',')})`);
   }
 
@@ -232,18 +295,25 @@ export default class SQLiteCache extends AsyncRecordCache {
     type: string,
     db: SQLiteDatabase
   ): Promise<Record> {
-    const attributes = { ...input };
-    const id = attributes.id;
-    delete attributes.id;
-    const keys = attributes.__keys__;
-    delete attributes.__keys__;
-    const processedAttributes = stripNullFields(attributes);
-    const record: Record = { type, id };
-    if (Object.keys(processedAttributes).length) {
-      record.attributes = processedAttributes;
+    const id = input[ID_FIELD_NAME];
+    let attributes = {};
+    let keys = {};
+
+    try {
+      attributes = JSON.parse(input[ATTRIBUTES_FIELD_NAME]);
     }
-    if (keys) {
-      record.keys = JSON.parse(keys);
+    catch (e) {}
+    try {
+      keys = JSON.parse(input[KEYS_FIELD_NAME]);
+    }
+    catch (e) {}
+
+    const record: Record = { type, id };
+    if (attributes && Object.keys(attributes).length) {
+      record.attributes = attributes;
+    }
+    if (keys && Object.keys(keys).length) {
+      record.keys = keys;
     }
     const relationships = await this._getRelationshipsForRecord(record, db);
     if (Object.keys(relationships).length) {
@@ -255,7 +325,7 @@ export default class SQLiteCache extends AsyncRecordCache {
   async getRecordAsync (record: RecordIdentity): Promise<Record|undefined> {
     const db = await this.openDB()
     const [ res ] = await db.executeSql(
-      `SELECT * FROM '${record.type}' WHERE id=?`,
+      `SELECT * FROM '${record.type}' WHERE ${ID_FIELD_NAME}=?`,
       [ record.id ]
     )
     if (res.rows.length && res.rows.length === 1) {
@@ -312,12 +382,12 @@ export default class SQLiteCache extends AsyncRecordCache {
     const { id, type, attributes, keys, relationships } = record;
     const kv: KV[] = (attributes === undefined) ?
       [] :
-      Object.keys(attributes).map((key: string) => ({ key, value: attributes[key] }));
+      [{ key: ATTRIBUTES_FIELD_NAME, value: JSON.stringify(attributes) }];
     if (keys) {
-      kv.push({ key: '__keys__', value: keys ? JSON.stringify(keys) : null });
+      kv.push({ key: KEYS_FIELD_NAME, value: keys ? JSON.stringify(keys) : null });
     }
     if (shouldInsert) {
-      kv.unshift({ key: 'id', value: id });
+      kv.unshift({ key: ID_FIELD_NAME, value: id });
       const placeholder = Array(kv.length).fill('?');
       tx.executeSql(
         `INSERT INTO '${type}'
@@ -333,7 +403,7 @@ export default class SQLiteCache extends AsyncRecordCache {
         tx.executeSql(
           `UPDATE '${type}'
           SET ${kv.map(({key}) => `'${key}'=?`).join(', ')}
-          WHERE id=?`,
+          WHERE ${ID_FIELD_NAME}=?`,
           values
         );
       }
@@ -449,9 +519,9 @@ export default class SQLiteCache extends AsyncRecordCache {
     const db = await this.openDB();
     const { type, id } = record;
     const [ existingItemRS ] = await db.executeSql(
-      `SELECT id
+      `SELECT ${ID_FIELD_NAME}
       FROM '${type}'
-      WHERE id=?`,
+      WHERE ${ID_FIELD_NAME}=?`,
       [id]
     );
     const existingRelationships = await this._getRelationshipsForRecord(record, db);
@@ -470,9 +540,9 @@ export default class SQLiteCache extends AsyncRecordCache {
       const recordsToAdd = await Promise.all(records.map(async (record: Record) => {
         const { id, type } = record;
         const [ existingItemRS ] = await db.executeSql(
-          `SELECT id
+          `SELECT ${ID_FIELD_NAME}
           FROM '${type}'
-          WHERE id=?`,
+          WHERE ${ID_FIELD_NAME}=?`,
           [id]
         );
         const existingRelationships = await this._getRelationshipsForRecord(record, db);
@@ -502,7 +572,7 @@ export default class SQLiteCache extends AsyncRecordCache {
     const { type, id } = recordIdentity;
     tx.executeSql(
       `DELETE FROM '${type}'
-      WHERE id=?`,
+      WHERE ${ID_FIELD_NAME}=?`,
       [id]
     );
   }
