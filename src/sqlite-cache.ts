@@ -1,7 +1,7 @@
 import Orbit, {
   Record,
   RecordIdentity,
-  RecordRelationship
+  RecordRelationship,
 } from '@orbit/data';
 import {
   RecordRelationshipIdentity,
@@ -11,8 +11,6 @@ import {
 import {
   supportsSQLite,
   stripNullFields,
-  getDiff,
-  isSameIdentity,
   rsToArray,
   EventEmitter
 } from './utils';
@@ -23,11 +21,12 @@ const { assert } = Orbit;
 
 const VERSION_TABLE_NAME = '__VERSION__';
 const INTERNAL_VERSION_TABLE_NAME = '__RN_ORBIT_SQLITE_VERSION__';
+const RELATIONSHIPS_TABLE_NAME = '__RELATIONSHIPS__';
 const ID_FIELD_NAME = 'id';
 const ATTRIBUTES_FIELD_NAME = 'attributes';
 const KEYS_FIELD_NAME = 'keys';
 
-export const VERSION = 1;
+export const VERSION = 2;
 
 export type SQLiteDBLocation = 'default'|'Documents'|'Library'
 
@@ -136,13 +135,13 @@ export default class SQLiteCache extends AsyncRecordCache {
         if (res.rows.length !== 0) {
           const [ versions ] = await db.executeSql(
             `SELECT *
-              FROM '${VERSION_TABLE_NAME}'`
+              FROM '${INTERNAL_VERSION_TABLE_NAME}'`
           );
           currentInternalVersion = versions.rows.item(0).version;
         }
 
         if (currentInternalVersion < VERSION) {
-          await this.migrateDBInternalFrom(currentInternalVersion, db);
+          await this._migrateDBInternalFrom(currentInternalVersion, db);
         }
 
         const [ versions ] = await db.executeSql(
@@ -177,10 +176,10 @@ export default class SQLiteCache extends AsyncRecordCache {
       tx.executeSql(`CREATE TABLE '${VERSION_TABLE_NAME}'('version' NUMERIC)`);
       this.setVersion(version, tx);
       tx.executeSql(`CREATE TABLE '${INTERNAL_VERSION_TABLE_NAME}'('version' NUMERIC)`);
-      this.setInternalVersion(VERSION, tx);
+      this._setInternalVersion(VERSION, tx);
+      this._createRelationshipTables(tx);
       for (const model of Object.keys(this.schema.models)) {
         this._createModelTable(model, tx);
-        this._createRelationshipTables(model, tx);
       }
     });
   }
@@ -194,8 +193,13 @@ export default class SQLiteCache extends AsyncRecordCache {
     );
   }
 
-  async migrateDBInternalTo1 (db: SQLiteDatabase) {
-    const existingData: Dict<any[]> = {};
+  async _migrateDBInternalTo1 (db: SQLiteDatabase) {
+    interface SQLiteRecordV1 {
+      id: string;
+      attributes: any,
+      keys: any;
+    }
+    const existingData: Dict<SQLiteRecordV1[]> = {};
     for (const model of Object.keys(this.schema.models)) {
       const [ res ] = await db.executeSql(`SELECT * FROM '${model}'`);
       const content = rsToArray(res);
@@ -218,13 +222,61 @@ export default class SQLiteCache extends AsyncRecordCache {
         }
       }
       tx.executeSql(`CREATE TABLE '${INTERNAL_VERSION_TABLE_NAME}'('version' NUMERIC)`);
-      this.setInternalVersion(1, tx);
+      this._setInternalVersion(1, tx);
     });
   }
 
-  async migrateDBInternalFrom (currentInternalVersion: number, db: SQLiteDatabase) {
+  async _migrateDBInternalTo2 (db: SQLiteDatabase) {
+    interface RelationshipsV2 {
+      source_id: string;
+      source_table: string;
+      relation_name: string;
+      target_id: string;
+      target_table: string;
+    }
+    const relationshipsToInsert: RelationshipsV2[] = [];
+    for (const [ modelName, model ] of Object.entries(this.schema.models)) {
+      if (model.relationships) {
+        for (const [ name, relationship ] of Object.entries(model.relationships)) {
+          const [ rels ] = await db.executeSql(`SELECT * FROM relationships_${modelName}_${relationship.model}`);
+          const previousRelationships = rsToArray(rels);
+          for (const previousRelationship of previousRelationships) {
+            relationshipsToInsert.push({
+              source_id: previousRelationship[`${modelName}_id`],
+              source_table: modelName,
+              relation_name: name,
+              target_id: previousRelationship[`${relationship.model}_id`],
+              target_table: relationship.model as string,
+            });
+          }
+        }
+      }
+    }
+    const [ tbl ] = await db.executeSql(`SELECT name FROM 'sqlite_master' WHERE type=? AND name LIKE ? ESCAPE ?`, [ 'table', 'relationships/_%/_%', '/' ]);
+    const tableNamesToDrop: string[] = rsToArray(tbl).map((data) => data.name);
+    await db.transaction((tx: Transaction) => {
+      for (const tableNameToDrop of tableNamesToDrop) {
+        tx.executeSql(`DROP TABLE ${tableNameToDrop}`);
+      }
+      this._createRelationshipTables(tx);
+      for (const { source_id, source_table, relation_name, target_id, target_table } of relationshipsToInsert) {
+        tx.executeSql(
+          `INSERT INTO '${RELATIONSHIPS_TABLE_NAME}'
+          ('source_id', 'source_table', 'relation_name', 'target_id', 'target_table')
+          VALUES(?, ?, ?, ?, ?)`,
+          [ source_id, source_table, relation_name, target_id, target_table ]
+        )
+      }
+      this._setInternalVersion(2, tx);
+    });
+  }
+
+  async _migrateDBInternalFrom (currentInternalVersion: number, db: SQLiteDatabase) {
     if (currentInternalVersion < 1) {
-      await this.migrateDBInternalTo1(db);
+      await this._migrateDBInternalTo1(db);
+    }
+    if (currentInternalVersion < 2) {
+      await this._migrateDBInternalTo2(db);
     }
   }
 
@@ -238,7 +290,7 @@ export default class SQLiteCache extends AsyncRecordCache {
     );
   }
 
-  setInternalVersion (version: number, tx: Transaction) {
+  _setInternalVersion (version: number, tx: Transaction) {
     tx.executeSql(`DELETE FROM '${INTERNAL_VERSION_TABLE_NAME}'`)
     tx.executeSql(
       `INSERT INTO '${INTERNAL_VERSION_TABLE_NAME}'
@@ -263,24 +315,15 @@ export default class SQLiteCache extends AsyncRecordCache {
     tx.executeSql(`CREATE TABLE '${type}'(${fieldsQuery.join(',')})`);
   }
 
-  // TODO It might be possible to create a single table for all the realtionships
-  // Structure : source_id, table_name, relation_name, target_id
-  private _createRelationshipTables (type: string, tx: Transaction) {
-    const { relationships } = this.schema.getModel(type);
-    if (relationships !== undefined) {
-      for (const relationshipKey of Object.keys(relationships)) {
-        const { model } = relationships[relationshipKey];
-        tx.executeSql(`CREATE TABLE 'relationships_${type}_${model}'(
-          '${type}_id' TEXT NOT NULL,
-          '${model}_id' TEXT NOT NULL,
-          FOREIGN KEY ('${type}_id')
-            REFERENCES '${type}'('id'),
-          FOREIGN KEY ('${model}_id')
-            REFERENCES '${model}'('id'),
-          PRIMARY KEY('${type}_id', '${model}_id')
-        )`);
-      }
-    }
+  private _createRelationshipTables (tx: Transaction) {
+    tx.executeSql(`CREATE TABLE '${RELATIONSHIPS_TABLE_NAME}'(
+      'source_id' TEXT NOT NULL,
+      'source_table' TEXT NOT NULL,
+      'relation_name' TEXT NOT NULL,
+      'target_id' TEXT NOT NULL,
+      'target_table' TEXT NOT NULL,
+      PRIMARY KEY('source_id', 'source_table', 'relation_name', 'target_id', 'target_table')
+    )`);
   }
 
   async clearRecords (type: string): Promise<void> {
@@ -408,70 +451,34 @@ export default class SQLiteCache extends AsyncRecordCache {
         );
       }
     }
+    tx.executeSql(
+      `DELETE FROM ${RELATIONSHIPS_TABLE_NAME}
+      WHERE source_id=?
+      AND source_table=?`,
+      [ id, type ]
+    );
     if (relationships !== undefined) {
-      const relationshipsToAdd: Dict<RecordRelationship> = {};
-      const relationshipsToRemove: Dict<RecordRelationship> = {};
-      const model = this.schema.getModel(type)
       for (const [name, recordRelationship] of Object.entries(relationships)) {
-        const relationshipType = model.relationships[name].type;
-        if (relationshipType === 'hasMany') {
-          const existing = existingRelationships[name] ?
-                            existingRelationships[name].data as RecordIdentity[] :
-                            [];
-          const wanted = recordRelationship.data as RecordIdentity[];
-          const toAdd = getDiff(wanted, existing, isSameIdentity);
-          const toRemove = getDiff(existing, wanted, isSameIdentity);
-          if (toAdd.length) {
-            relationshipsToAdd[name] = { data: toAdd };
+        if (recordRelationship.data) {
+          if (Array.isArray(recordRelationship.data)) {
+            for (const rel of recordRelationship.data) {
+              tx.executeSql(
+                `INSERT INTO '${RELATIONSHIPS_TABLE_NAME}'
+                ('source_id', 'source_table', 'relation_name', 'target_id', 'target_table')
+                VALUES(?, ?, ?, ?, ?)`,
+                [ id, type, name, rel.id, rel.type ]
+              )
+            }
           }
-          if (toRemove.length) {
-            relationshipsToRemove[name] = { data: toRemove };
+          else {
+            const rel = recordRelationship.data as RecordIdentity;
+            tx.executeSql(
+              `INSERT INTO '${RELATIONSHIPS_TABLE_NAME}'
+              ('source_id', 'source_table', 'relation_name', 'target_id', 'target_table')
+              VALUES(?, ?, ?, ?, ?)`,
+              [ id, type, name, rel.id, rel.type ]
+            )
           }
-        }
-        else {
-          const existing = existingRelationships[name] ?
-                            existingRelationships[name].data as RecordIdentity :
-                            undefined;
-          const wanted = recordRelationship.data as RecordIdentity|null;
-          if (existing === undefined && wanted !== null) {
-            relationshipsToAdd[name] = { data: wanted };
-          }
-          else if (existing !== undefined && wanted === null) {
-            relationshipsToRemove[name] = { data: existing };
-          }
-          else if (existing !== undefined && wanted !== null &&
-            !isSameIdentity(existing, wanted)
-          ) {
-            relationshipsToRemove[name] = { data: existing };
-            relationshipsToAdd[name] = { data: wanted };
-          }
-        }
-      }
-      for (const [ name, relationship ] of Object.entries(relationshipsToRemove)) {
-        const recordIdentitites: RecordIdentity[] = Array.isArray(relationship.data) ?
-                                                    relationship.data :
-                                                    [relationship.data];
-        for (const recordIdentity of recordIdentitites) {
-          const { type: relationshipModel, id: relationshipId } = recordIdentity;
-          tx.executeSql(
-            `DELETE FROM 'relationships_${type}_${relationshipModel}'
-            WHERE ${type}_id=? AND ${relationshipModel}_id=?`,
-            [ id, relationshipId ]
-          )
-        }
-      }
-      for (const [ name, relationship ] of Object.entries(relationshipsToAdd)) {
-        const recordIdentitites: RecordIdentity[] = Array.isArray(relationship.data) ?
-                                                    relationship.data :
-                                                    [relationship.data];
-        for (const recordIdentity of recordIdentitites) {
-          const { type: relationshipModel, id: relationshipId } = recordIdentity;
-          tx.executeSql(
-            `INSERT INTO 'relationships_${type}_${relationshipModel}'
-            ('${type}_id', '${relationshipModel}_id')
-            VALUES (?, ?)`,
-            [ id, relationshipId ]
-          )
         }
       }
     }
@@ -485,32 +492,26 @@ export default class SQLiteCache extends AsyncRecordCache {
     const result: Dict<RecordRelationship> = {};
     const potentialRelationships = this.schema.getModel(record.type).relationships;
     if (potentialRelationships !== undefined) {
-      await Promise.all(Object.entries(potentialRelationships).map(
-        async ([ name, definition ]) => {
-          const model: string = typeof definition.model === 'string' ?
-                                  definition.model :
-                                  definition.model[0];
-          const [ res ] = await db.executeSql(
-            `SELECT ${model}_id
-            FROM 'relationships_${record.type}_${model}'
-            WHERE ${record.type}_id=?`,
-            [ record.id ]
-          );
-          const results = rsToArray(res);
-          if (results.length > 0) {
-            if (definition.type === 'hasMany') {
-              const data: RecordIdentity[] = results.map((result) => (
-                { type: model, id: result[`${model}_id`] }
-              ));
-              result[name] = { data };
-            }
-            else {
-              const data = { type: model, id: results[0][`${model}_id`] } as RecordIdentity;
-              result[name] = { data }
-            }
+      const [ res ] = await db.executeSql(
+        `SELECT relation_name, target_id, target_table
+        FROM '${RELATIONSHIPS_TABLE_NAME}'
+        WHERE source_id=? AND source_table=?`,
+        [ record.id, record.type ]
+      );
+      const results = rsToArray(res);
+      for (const [ name, definition ] of Object.entries(potentialRelationships)) {
+        const data: RecordIdentity[] = results
+          .filter((result) => result.relation_name === name)
+          .map((result) => ({ type: result.target_table, id: result.target_id }));
+        if (data.length) {
+          if (definition.type === 'hasMany') {
+            result[name] = { data };
+          }
+          else {
+            result[name] = { data: data[0] }
           }
         }
-      ))
+      }
     }
     return result;
   }
@@ -610,31 +611,23 @@ export default class SQLiteCache extends AsyncRecordCache {
       return [];
     }
     const db = await this.openDB();
-    const results = await Promise.all(Object.entries(relationships).map(
-      async ([ name, relationship ]) => {
-        const model: string = typeof relationship.model === 'string' ?
-                              relationship.model :
-                              relationship.model[0];
-        const [ rs ] = await db.executeSql(
-          `SELECT ${model}_id
-          FROM 'relationships_${model}_${type}'
-          WHERE ${type}_id=?`,
-          [ id ]
-        );
-        const results = rsToArray(rs);
-        return results.map(
-          (result) => ({
-            record,
-            relationship: name,
-            relatedRecord: {
-              type: model,
-              id: result[`${model}_id`]
-            }
-          })
-        )
-      }
-    ));
-    return results.reduce((prev, curr) => [ ...prev, ...curr ], []);
+    const [ rs ] = await db.executeSql(
+      `SELECT relation_name, source_id, source_table
+      FROM '${RELATIONSHIPS_TABLE_NAME}'
+      WHERE target_id=? AND target_table=?`,
+      [ id, type ]
+    );
+    const results = rsToArray(rs);
+    return results.map(
+      (result) => ({
+        record,
+        relationship: result.relation_name,
+        relatedRecord: {
+          type: result.source_table,
+          id: result.source_id,
+        }
+      })
+    )
   }
 
   async addInverseRelationshipsAsync (
@@ -644,34 +637,16 @@ export default class SQLiteCache extends AsyncRecordCache {
       return ;
     }
     const db = await this.openDB();
-    const relationshipsToAdd = (await Promise.all(relationships.map(
-      async (relationship: RecordRelationshipIdentity) => {
-        const { record, relatedRecord } = relationship;
-        const [ res ] = await db.executeSql(
-          `SELECT *
-          FROM 'relationships_${record.type}_${relatedRecord.type}'
-          WHERE ${record.type}_id=?
-          AND ${relatedRecord.type}_id=?`,
-          [ record.id, relatedRecord.id ]
+    await db.transaction((tx: Transaction) => {
+      for (const { record, relationship, relatedRecord } of relationships) {
+        tx.executeSql(
+          `INSERT INTO '${RELATIONSHIPS_TABLE_NAME}'
+          ('source_id', 'source_table', 'relation_name', 'target_id', 'target_table')
+          VALUES(?, ?, ?, ?, ?)`,
+          [ relatedRecord.id, relatedRecord.type, relationship, record.id, record.type ]
         );
-        if (res.rows.length === 0) {
-          return relationship;
-        }
-        return null;
       }
-    ))).filter(r => r !== null);
-    if (relationshipsToAdd.length > 0) {
-      await db.transaction((tx: Transaction) => {
-        for (const { record, relatedRecord } of relationshipsToAdd) {
-          tx.executeSql(
-            `INSERT INTO 'relationships_${relatedRecord.type}_${record.type}'
-            ('${record.type}_id', '${relatedRecord.type}_id')
-            VALUES(?, ?)`,
-            [ record.id, relatedRecord.id ]
-          );
-        }
-      })
-    }
+    })
   }
 
   async removeInverseRelationshipsAsync (
@@ -682,12 +657,15 @@ export default class SQLiteCache extends AsyncRecordCache {
     }
     const db = await this.openDB();
     await db.transaction((tx: Transaction) => {
-      for (const { record, relatedRecord } of relationships) {
+      for (const { record, relationship, relatedRecord } of relationships) {
         tx.executeSql(
-          `DELETE FROM 'relationships_${relatedRecord.type}_${record.type}'
-          WHERE ${record.type}_id=?
-          AND ${relatedRecord.type}_id=?`,
-          [ record.id, relatedRecord.id ]
+          `DELETE FROM '${RELATIONSHIPS_TABLE_NAME}'
+          WHERE source_id=? AND
+          source_table=? AND
+          relation_name=? AND
+          target_id=? AND
+          target_table=?`,
+          [ relatedRecord.id, relatedRecord.type, relationship, record.id, record.type ]
         );
       }
     })
