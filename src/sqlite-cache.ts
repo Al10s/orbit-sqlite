@@ -320,8 +320,8 @@ export default class SQLiteCache extends AsyncRecordCache {
       'source_id' TEXT NOT NULL,
       'source_table' TEXT NOT NULL,
       'relation_name' TEXT NOT NULL,
-      'target_id' TEXT NOT NULL,
-      'target_table' TEXT NOT NULL,
+      'target_id' TEXT,
+      'target_table' TEXT,
       PRIMARY KEY('source_id', 'source_table', 'relation_name', 'target_id', 'target_table')
     )`);
   }
@@ -416,7 +416,6 @@ export default class SQLiteCache extends AsyncRecordCache {
     record: Record,
     tx: Transaction,
     shouldInsert: boolean,
-    existingRelationships: Dict<RecordRelationship>
   ): Record {
     interface KV {
       key: string;
@@ -459,7 +458,7 @@ export default class SQLiteCache extends AsyncRecordCache {
     );
     if (relationships !== undefined) {
       for (const [name, recordRelationship] of Object.entries(relationships)) {
-        if (recordRelationship.data) {
+        if (recordRelationship.data !== undefined) {
           if (Array.isArray(recordRelationship.data)) {
             for (const rel of recordRelationship.data) {
               tx.executeSql(
@@ -470,13 +469,21 @@ export default class SQLiteCache extends AsyncRecordCache {
               )
             }
           }
-          else {
-            const rel = recordRelationship.data as RecordIdentity;
+          else if (recordRelationship.data !== null) {
+            const rel = recordRelationship.data;
             tx.executeSql(
               `INSERT INTO '${RELATIONSHIPS_TABLE_NAME}'
               ('source_id', 'source_table', 'relation_name', 'target_id', 'target_table')
               VALUES(?, ?, ?, ?, ?)`,
               [ id, type, name, rel.id, rel.type ]
+            )
+          }
+          else {
+            tx.executeSql(
+              `INSERT INTO '${RELATIONSHIPS_TABLE_NAME}'
+              ('source_id', 'source_table', 'relation_name', 'target_id', 'target_table')
+              VALUES(?, ?, ?, ?, ?)`,
+              [ id, type, name, null, null ]
             )
           }
         }
@@ -508,7 +515,13 @@ export default class SQLiteCache extends AsyncRecordCache {
             result[name] = { data };
           }
           else {
-            result[name] = { data: data[0] }
+            const effectiveData = data[0];
+            if (effectiveData.id === null) {
+              result[name] = { data: null };
+            }
+            else {
+              result[name] = { data: effectiveData };
+            }
           }
         }
       }
@@ -525,9 +538,8 @@ export default class SQLiteCache extends AsyncRecordCache {
       WHERE ${ID_FIELD_NAME}=?`,
       [id]
     );
-    const existingRelationships = await this._getRelationshipsForRecord(record, db);
     await db.transaction((tx: Transaction) => {
-      this._setRecord(record, tx, existingItemRS.rows.length === 0, existingRelationships);
+      this._setRecord(record, tx, existingItemRS.rows.length === 0);
     });
     const rcd = await this.getRecordAsync(record);
     if (this._keyMap) {
@@ -546,16 +558,14 @@ export default class SQLiteCache extends AsyncRecordCache {
           WHERE ${ID_FIELD_NAME}=?`,
           [id]
         );
-        const existingRelationships = await this._getRelationshipsForRecord(record, db);
         return {
           record,
           shouldInsert: existingItemRS.rows.length === 0,
-          existingRelationships,
         };
       }));
       await db.transaction((tx: Transaction) => {
-        for (const { record, shouldInsert, existingRelationships } of recordsToAdd) {
-          this._setRecord(record, tx, shouldInsert, existingRelationships);
+        for (const { record, shouldInsert } of recordsToAdd) {
+          this._setRecord(record, tx, shouldInsert);
         }
       });
       const recordsAdded = await this.getRecordsAsync(recordsToAdd.map(

@@ -757,12 +757,11 @@ const units: RunnableTestUnit<Context>[] = [
           name: 'Jupiter',
           classification: 'gas giant'
         },
-        // TODO Support empty-to-one relationships ?
-//        relationships: {
-//          solarSystem: {
-//            data: null
-//          }
-//        }
+        relationships: {
+          solarSystem: {
+            data: null
+          }
+        }
       };
 
       await cache.patch(t => t.addRecord(original));
@@ -783,12 +782,11 @@ const units: RunnableTestUnit<Context>[] = [
       const revised: Record = {
         type: 'planet',
         id: 'jupiter',
-        // TODO Support empty-to-one relationships ?
-//        relationships: {
-//          solarSystem: {
-//            data: null
-//          }
-//        }
+        relationships: {
+          solarSystem: {
+            data: null
+          }
+        }
       };
 
       await cache.patch(t =>
