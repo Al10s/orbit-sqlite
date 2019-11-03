@@ -132,6 +132,11 @@ yarn run android
 I don't own a Mac so I can't test it yet, but if you know the procedure to follow you can tell me and I will change it if needed.
 
 ```bash
+# Location : <project>/tests/ios
+pod install
+```
+
+```bash
 # Location : <project>/tests/
 yarn run ios
 ```
