@@ -10,7 +10,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@al10s/react-native-orbit-sqlite": "^0.0.5",
+    "@al10s/react-native-orbit-sqlite": "0.0.6",
     "react": "16.8.6",
     "react-native": "0.60.6"
   },

@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@al10s/react-native-orbit-sqlite@^0.0.5":
-  version "0.0.5"
-  resolved "https://registry.yarnpkg.com/@al10s/react-native-orbit-sqlite/-/react-native-orbit-sqlite-0.0.5.tgz#43438a68a3e126462e18d0af7d55edc81a90f0c6"
-  integrity sha512-XQ0+/p/eAnnDVdCVuWnTJYW4O9BEsEym/i1yFGBxM2J9tPHdeFQVL90fYzvrvAg6/H6zDFkePN12pcOvcltGOg==
+"@al10s/react-native-orbit-sqlite@0.0.6":
+  version "0.0.6"
+  resolved "https://registry.yarnpkg.com/@al10s/react-native-orbit-sqlite/-/react-native-orbit-sqlite-0.0.6.tgz#1f30f4f2602b97c83545c79b6a49cdf0c3a9aa7e"
+  integrity sha512-eQuPC5EfYI8QZ8JqA/HgDM0X04sgzBFLUODeK3Mz/KFHwN8ZfAgmwVNGJKqqD09nVUe8iwaLCosf37zET2IP9w==
   dependencies:
     "@orbit/data" "^0.16.3"
     "@orbit/record-cache" "^0.16.3"
