@@ -1,6 +1,7 @@
 import { TestUnit, EventEmitter, RunnableTestUnit, TestSuite, TestContext } from '../../utils';
 import { Schema, KeyMap, Record } from '@orbit/data';
-import { SQLiteCache } from '@al10s/react-native-orbit-sqlite';
+import { SQLiteCache, VERSION } from '@al10s/react-native-orbit-sqlite';
+import version0 from './version0';
 import assert from 'assert';
 
 interface Context extends TestContext {
@@ -301,7 +302,7 @@ const units: RunnableTestUnit<Context>[] = [
         attributes: {
           name: 'Jupiter',
           classification: 'gas giant',
-          // revised: true TODO when booleans will be supported (Data should be stored as JSON, it won't be querried anyways)
+          revised: true,
         }
       };
 
@@ -427,13 +428,12 @@ const units: RunnableTestUnit<Context>[] = [
         type: 'planet',
         id: 'jupiter',
         attributes: {
-          // order: 5 TODO When the attributes will be serialized as JSON (outside of the schema)
-          name: 'Jupiter'
+          order: 5,
         }
       };
 
       await cache.patch(t =>
-        t.replaceAttribute({ type: 'planet', id: 'jupiter' }, 'name', 'Jupiter')
+        t.replaceAttribute({ type: 'planet', id: 'jupiter' }, 'order', 5)
       );
       assert.deepStrictEqual(
         await cache.getRecordAsync(revised),
@@ -1010,6 +1010,61 @@ const units: RunnableTestUnit<Context>[] = [
         'jupiter',
         'key has been mapped'
       );
+    },
+  },
+  {
+    label: 'upgrade to v1 works as intended',
+    run: async (context: Context) => {
+      await context.cache.deleteDB();
+      const { schema, keyMap } = context;
+      const dbv0 = await version0.createDBForSchema(schema);
+
+      const jupiter = {
+        type: 'planet',
+        id: 'jupiter',
+        attributes: { name: 'Jupiter' },
+        relationships: {
+          moons: {
+            data: [
+              { type: 'moon', id: 'europa' },
+              { type: 'moon', id: 'io' },
+            ]
+          }
+        }
+      };
+      const europa = {
+        type: 'moon',
+        id: 'europa',
+        attributes: { name: 'Europa' },
+        relationships: { planet: { data: { type: 'planet', id: 'jupiter' } } }
+      };
+      const io = { 
+        type: 'moon',
+        id: 'io',
+        attributes: { name: 'Io' },
+        relationships: { planet: { data: { type: 'planet', id: 'jupiter' } } },
+      };
+
+      await version0.insertRecords([ jupiter, io, europa ], schema, dbv0);
+      await dbv0.close();
+
+      const cache = new SQLiteCache({ schema, keyMap });
+
+      const db = await cache.openDB();
+      const [res] = await db.executeSql(`SELECT version FROM '__RN_ORBIT_SQLITE_VERSION__'`);
+      assert(res.rows.length === 1, 'there is an internal version');
+      const { version } = res.rows.item(0);
+      assert(version === VERSION, 'the internal version is correct');
+
+      assert.deepStrictEqual(await cache.getRecordAsync(jupiter), jupiter);
+      assert.deepStrictEqual(await cache.getRecordAsync(io), io);
+      assert.deepStrictEqual(await cache.getRecordAsync(europa), europa);
+
+      const [planets] = await db.executeSql(`SELECT * FROM 'planet' WHERE id=?`, ['jupiter']);
+      assert.deepStrictEqual(planets.rows.length, 1)
+      assert.deepStrictEqual(planets.rows.item(0), { id: 'jupiter', attributes: JSON.stringify(jupiter.attributes), keys: null })
+
+      context.cache = cache;
     },
   },
   {
