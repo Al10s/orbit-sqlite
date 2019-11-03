@@ -569,14 +569,14 @@ const units: RunnableTestUnit<Context>[] = [
         type: 'planet',
         id: 'jupiter',
         attributes: {
-          name: 'Joopitah',
+          name: 'Jupiter',
           classification: 'gas giant',
-          // order: 5 TODO When the attributes will be serialized as JSON (outside of the schema)
+          order: 5
         }
       };
   
       await source.push(t => t.addRecord(original));
-      await source.push(t => t.replaceAttribute(original, 'name', 'Joopitah'));
+      await source.push(t => t.replaceAttribute(original, 'order', 5));
       assert.deepEqual(
         await source.cache.getRecordAsync(revised),
         revised,
@@ -593,13 +593,12 @@ const units: RunnableTestUnit<Context>[] = [
         type: 'planet',
         id: 'jupiter',
         attributes: {
-          // order: 5 TODO When the attributes will be serialized as JSON (outside of the schema)
-          name: 'Jupiter'
+          order: 5
         }
       };
   
       await source.push(t =>
-        t.replaceAttribute({ type: 'planet', id: 'jupiter' }, 'name', 'Jupiter')
+        t.replaceAttribute({ type: 'planet', id: 'jupiter' }, 'order', 5)
       );
       assert.deepEqual(
         await source.cache.getRecordAsync(revised),
@@ -931,12 +930,11 @@ const units: RunnableTestUnit<Context>[] = [
           name: 'Jupiter',
           classification: 'gas giant'
         },
-        // TODO Support empty-to-one relationships ?
-//        relationships: {
-//          solarSystem: {
-//            data: null
-//          }
-//        }
+        relationships: {
+          solarSystem: {
+            data: null
+          }
+        }
       };
   
       await source.push(t => t.addRecord(original));
@@ -958,12 +956,11 @@ const units: RunnableTestUnit<Context>[] = [
       const revised: Record = {
         type: 'planet',
         id: 'jupiter',
-        // TODO Support empty-to-one relationships ?
-//        relationships: {
-//          solarSystem: {
-//            data: null
-//          }
-//        }
+        relationships: {
+          solarSystem: {
+            data: null
+          }
+        }
       };
   
       await source.push(t =>

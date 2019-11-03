@@ -757,12 +757,11 @@ const units: RunnableTestUnit<Context>[] = [
           name: 'Jupiter',
           classification: 'gas giant'
         },
-        // TODO Support empty-to-one relationships ?
-//        relationships: {
-//          solarSystem: {
-//            data: null
-//          }
-//        }
+        relationships: {
+          solarSystem: {
+            data: null
+          }
+        }
       };
 
       await cache.patch(t => t.addRecord(original));
@@ -783,12 +782,11 @@ const units: RunnableTestUnit<Context>[] = [
       const revised: Record = {
         type: 'planet',
         id: 'jupiter',
-        // TODO Support empty-to-one relationships ?
-//        relationships: {
-//          solarSystem: {
-//            data: null
-//          }
-//        }
+        relationships: {
+          solarSystem: {
+            data: null
+          }
+        }
       };
 
       await cache.patch(t =>
@@ -1013,7 +1011,150 @@ const units: RunnableTestUnit<Context>[] = [
     },
   },
   {
-    label: 'upgrade to v1 works as intended',
+    label: 'allows records with multiple relationships to the same model',
+    run: async (context: Context) => {
+      const schema = new Schema({
+        models: {
+          planet: {
+            keys: { remoteId: {} },
+            attributes: {
+              name: { type: 'string' },
+              classification: { type: 'string' },
+              revised: { type: 'boolean' }
+            },
+            relationships: {
+              moons: { type: 'hasMany', model: 'moon', inverse: 'planet' },
+              biggestMoon: { type: 'hasOne', model: 'moon' }
+            }
+          },
+          moon: {
+            keys: { remoteId: {} },
+            attributes: {
+              name: { type: 'string' }
+            },
+            relationships: {
+              planet: { type: 'hasOne', model: 'planet', inverse: 'moons' }
+            }
+          },
+        }
+      });
+      const keyMap = new KeyMap();
+      const cache = new SQLiteCache({ schema, keyMap });
+
+      const jupiter = {
+        type: 'planet',
+        id: 'jupiter',
+        attributes: { name: 'Jupiter' },
+        relationships: {
+          moons: { 
+            data: [
+              { type: 'moon', id: 'europa' },
+              { type: 'moon', id: 'ganymede' },
+              { type: 'moon', id: 'io' },
+            ]
+          },
+          biggestMoon: { data: { type: 'moon', id: 'ganymede' } },
+        }
+      };
+      const io = { type: 'moon', id: 'io', attributes: { name: 'Io' } };
+      const europa = {
+        type: 'moon',
+        id: 'europa',
+        attributes: { name: 'Europa' }
+      };
+      const ganymede = {
+        type: 'moon',
+        id: 'ganymede',
+        attributes: { name: 'Ganymede' }
+      };
+
+      await cache.setRecordAsync(jupiter);
+      await cache.setRecordAsync(io);
+      await cache.setRecordAsync(europa);
+      await cache.setRecordAsync(ganymede);
+
+      assert.deepStrictEqual(await cache.getRecordAsync(jupiter), jupiter);
+      assert.deepStrictEqual(await cache.getRecordAsync(io), io);
+      assert.deepStrictEqual(await cache.getRecordAsync(europa), europa);
+      assert.deepStrictEqual(await cache.getRecordAsync(ganymede), ganymede);
+
+      await cache.removeRecordAsync(jupiter);
+      await cache.removeRecordAsync(io);
+      await cache.removeRecordAsync(europa);
+      await cache.removeRecordAsync(ganymede);
+
+      assert.deepStrictEqual(await cache.getRecordAsync(jupiter), undefined);
+      assert.deepStrictEqual(await cache.getRecordAsync(io), undefined);
+      assert.deepStrictEqual(await cache.getRecordAsync(europa), undefined);
+      assert.deepStrictEqual(await cache.getRecordAsync(ganymede), undefined);
+    },
+  },
+  {
+    label: 'allows records with relationships to the same model as self',
+    run: async (context: Context) => {
+      const schema = new Schema({
+        models: {
+          planet: {
+            keys: { remoteId: {} },
+            attributes: {
+              name: { type: 'string' },
+              classification: { type: 'string' },
+              revised: { type: 'boolean' }
+            },
+            relationships: {
+              previous: { type: 'hasOne', model: 'planet', inverse: 'next' },
+              next: { type: 'hasOne', model: 'planet', inverse: 'previous' },
+            }
+          },
+        }
+      });
+      const keyMap = new KeyMap();
+      const cache = new SQLiteCache({ schema, keyMap });
+      const mercury = {
+        type: 'planet',
+        id: 'mercury',
+        attributes: { name: 'Mercury' },
+        relationships: {
+          next: { data: { type: 'planet', id: 'venus' } },
+        },
+      };
+      const venus = {
+        type: 'planet',
+        id: 'venus',
+        attributes: { name: 'Venus' },
+        relationships: {
+          previous: { data: { type: 'planet', id: 'mercury' } },
+          next: { data: { type: 'planet', id: 'earth' } },
+        },
+      };
+      const earth = {
+        type: 'planet',
+        id: 'earth',
+        attributes: { name: 'Earth' },
+        relationships: {
+          previous: { data: { type: 'planet', id: 'venus' } },
+        },
+      };
+
+      await cache.setRecordAsync(mercury);
+      await cache.setRecordAsync(venus);
+      await cache.setRecordAsync(earth);
+
+      assert.deepStrictEqual(await cache.getRecordAsync(mercury), mercury);
+      assert.deepStrictEqual(await cache.getRecordAsync(venus), venus);
+      assert.deepStrictEqual(await cache.getRecordAsync(earth), earth);
+
+      await cache.removeRecordAsync(mercury);
+      await cache.removeRecordAsync(venus);
+      await cache.removeRecordAsync(earth);
+
+      assert.deepStrictEqual(await cache.getRecordAsync(mercury), undefined);
+      assert.deepStrictEqual(await cache.getRecordAsync(venus), undefined);
+      assert.deepStrictEqual(await cache.getRecordAsync(earth), undefined);
+    },
+  },
+  {
+    label: 'upgrades work as intended',
     run: async (context: Context) => {
       await context.cache.deleteDB();
       const { schema, keyMap } = context;
@@ -1061,8 +1202,11 @@ const units: RunnableTestUnit<Context>[] = [
       assert.deepStrictEqual(await cache.getRecordAsync(europa), europa);
 
       const [planets] = await db.executeSql(`SELECT * FROM 'planet' WHERE id=?`, ['jupiter']);
-      assert.deepStrictEqual(planets.rows.length, 1)
-      assert.deepStrictEqual(planets.rows.item(0), { id: 'jupiter', attributes: JSON.stringify(jupiter.attributes), keys: null })
+      assert.deepStrictEqual(planets.rows.length, 1, 'there is still one item in db')
+      assert.deepStrictEqual(planets.rows.item(0), { id: 'jupiter', attributes: JSON.stringify(jupiter.attributes), keys: null }, 'the item is well formed')
+
+      const [ tbl ] = await db.executeSql(`SELECT name FROM 'sqlite_master' WHERE type=? AND name LIKE ?`, [ 'table', 'relationships%' ]);
+      assert.deepStrictEqual(tbl.rows.length, 0, 'former relationship tables have been dropped')
 
       context.cache = cache;
     },
