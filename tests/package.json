@@ -12,7 +12,7 @@
   "dependencies": {
     "@al10s/react-native-orbit-sqlite": "0.0.6",
     "react": "16.8.6",
-    "react-native": "0.60.6"
+    "react-native": "0.62.3"
   },
   "devDependencies": {
     "@babel/core": "^7.5.0",
